@@ -1133,10 +1133,8 @@ function SavePinToListForm({
   };
 
   return (
-    <div className="flex flex-col max-h-[70vh]">
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto space-y-4 pb-4">
-        {/* Pin Info */}
+    <div className="space-y-4">
+      {/* Pin Info */}
         <div className="bg-surface rounded-xl p-3">
           <p className="font-medium text-text-primary">{pin.name}</p>
           <p className="text-sm text-text-secondary truncate">{pin.address}</p>
@@ -1251,23 +1249,22 @@ function SavePinToListForm({
           </div>
         </div>
 
-        {/* Notes */}
-        <div>
-          <label className="block text-sm text-text-secondary mb-1.5">
-            Notes (optional)
-          </label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Add a note..."
-            rows={2}
-            className="w-full bg-surface-elevated border border-border rounded-xl px-4 py-3 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon-pink resize-none"
-          />
-        </div>
+      {/* Notes */}
+      <div>
+        <label className="block text-sm text-text-secondary mb-1.5">
+          Notes (optional)
+        </label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Add a note..."
+          rows={2}
+          className="w-full bg-surface-elevated border border-border rounded-xl px-4 py-3 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon-pink resize-none"
+        />
       </div>
 
-      {/* Actions - fixed at bottom */}
-      <div className="flex gap-3 pt-4 border-t border-border mt-2">
+      {/* Actions */}
+      <div className="flex gap-3 pt-2 sticky bottom-0 bg-surface pb-2">
         <Button variant="ghost" className="flex-1" onClick={onCancel}>
           Cancel
         </Button>
