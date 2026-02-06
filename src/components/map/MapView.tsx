@@ -179,37 +179,33 @@ export function MapView({
         },
       });
 
-      // Add individual pin markers
+      // Add pin background circles (for visibility and tap target)
       map.current.addLayer({
-        id: "unclustered-point",
+        id: "unclustered-point-bg",
         type: "circle",
         source: "pins",
         filter: ["!", ["has", "point_count"]],
         paint: {
           "circle-color": ["get", "color"],
-          "circle-radius": 10,
-          "circle-stroke-width": 3,
-          "circle-stroke-color": "#ffffff",
-          "circle-opacity": 0.9,
+          "circle-radius": 16,
+          "circle-opacity": 0.25,
+          "circle-blur": 0.5,
         },
       });
 
-      // Add pin glow effect
-      map.current.addLayer(
-        {
-          id: "unclustered-point-glow",
-          type: "circle",
-          source: "pins",
-          filter: ["!", ["has", "point_count"]],
-          paint: {
-            "circle-color": ["get", "color"],
-            "circle-radius": 20,
-            "circle-opacity": 0.3,
-            "circle-blur": 1,
-          },
+      // Add individual pin markers as emojis
+      map.current.addLayer({
+        id: "unclustered-point",
+        type: "symbol",
+        source: "pins",
+        filter: ["!", ["has", "point_count"]],
+        layout: {
+          "text-field": ["get", "emoji"],
+          "text-size": 24,
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
         },
-        "unclustered-point"
-      );
+      });
 
       // Add heatmap source (separate from clustered pins)
       map.current.addSource("heatmap-pins", {
@@ -367,7 +363,7 @@ export function MapView({
   useEffect(() => {
     if (!map.current || !isLoaded) return;
 
-    const pinLayers = ["clusters", "cluster-count", "unclustered-point", "unclustered-point-glow"];
+    const pinLayers = ["clusters", "cluster-count", "unclustered-point", "unclustered-point-bg"];
 
     if (showHeatmap) {
       // Show heatmap, hide pins
