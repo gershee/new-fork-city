@@ -1133,138 +1133,141 @@ function SavePinToListForm({
   };
 
   return (
-    <div className="space-y-4">
-      {/* Pin Info */}
-      <div className="bg-surface rounded-xl p-3">
-        <p className="font-medium text-text-primary">{pin.name}</p>
-        <p className="text-sm text-text-secondary truncate">{pin.address}</p>
-      </div>
+    <div className="flex flex-col max-h-[70vh]">
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto space-y-4 pb-4">
+        {/* Pin Info */}
+        <div className="bg-surface rounded-xl p-3">
+          <p className="font-medium text-text-primary">{pin.name}</p>
+          <p className="text-sm text-text-secondary truncate">{pin.address}</p>
+        </div>
 
-      {/* List Selection */}
-      <div>
-        <label className="block text-sm text-text-secondary mb-1.5">
-          Save to list
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {lists.map((list) => (
+        {/* List Selection */}
+        <div>
+          <label className="block text-sm text-text-secondary mb-1.5">
+            Save to list
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {lists.map((list) => (
+              <button
+                key={list.id}
+                onClick={() => setSelectedListId(list.id)}
+                className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors ${
+                  selectedListId === list.id
+                    ? "bg-neon-pink text-white"
+                    : "bg-surface-elevated text-text-primary border border-border"
+                }`}
+              >
+                <span>{list.emoji_icon}</span>
+                <span>{list.name}</span>
+              </button>
+            ))}
             <button
-              key={list.id}
-              onClick={() => setSelectedListId(list.id)}
+              onClick={() => setSelectedListId("new")}
               className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors ${
-                selectedListId === list.id
-                  ? "bg-neon-pink text-white"
-                  : "bg-surface-elevated text-text-primary border border-border"
+                selectedListId === "new"
+                  ? "bg-neon-cyan text-white"
+                  : "bg-surface-elevated text-text-primary border border-border border-dashed"
               }`}
             >
-              <span>{list.emoji_icon}</span>
-              <span>{list.name}</span>
+              <span>+</span>
+              <span>New list</span>
             </button>
-          ))}
-          <button
-            onClick={() => setSelectedListId("new")}
-            className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors ${
-              selectedListId === "new"
-                ? "bg-neon-cyan text-white"
-                : "bg-surface-elevated text-text-primary border border-border border-dashed"
-            }`}
-          >
-            <span>+</span>
-            <span>New list</span>
-          </button>
+          </div>
         </div>
-      </div>
 
-      {/* New List Form */}
-      {selectedListId === "new" && (
-        <div className="space-y-3 p-3 bg-surface rounded-xl">
-          <input
-            type="text"
-            value={newListName}
-            onChange={(e) => setNewListName(e.target.value)}
-            placeholder="List name..."
-            className="w-full bg-surface-elevated border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon-cyan"
+        {/* New List Form */}
+        {selectedListId === "new" && (
+          <div className="space-y-3 p-3 bg-surface rounded-xl">
+            <input
+              type="text"
+              value={newListName}
+              onChange={(e) => setNewListName(e.target.value)}
+              placeholder="List name..."
+              className="w-full bg-surface-elevated border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon-cyan"
+            />
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-text-muted">Icon:</span>
+              <div className="flex flex-wrap gap-1">
+                {EMOJI_OPTIONS.slice(0, 10).map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => setNewListEmoji(e)}
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${
+                      newListEmoji === e
+                        ? "bg-neon-cyan/20 ring-1 ring-neon-cyan"
+                        : "bg-surface-elevated"
+                    }`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-text-muted">Color:</span>
+              <div className="flex gap-1">
+                {COLOR_OPTIONS.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setNewListColor(c)}
+                    className={`w-6 h-6 rounded-full ${
+                      newListColor === c ? "ring-2 ring-white ring-offset-1 ring-offset-surface" : ""
+                    }`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Status */}
+        <div>
+          <label className="block text-sm text-text-secondary mb-1.5">
+            Status
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setIsVisited(false)}
+              className={`flex-1 px-4 py-2 rounded-xl text-sm transition-colors ${
+                !isVisited
+                  ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan"
+                  : "bg-surface-elevated text-text-secondary border border-border"
+              }`}
+            >
+              Want to try
+            </button>
+            <button
+              onClick={() => setIsVisited(true)}
+              className={`flex-1 px-4 py-2 rounded-xl text-sm transition-colors ${
+                isVisited
+                  ? "bg-neon-green/20 text-neon-green border border-neon-green"
+                  : "bg-surface-elevated text-text-secondary border border-border"
+              }`}
+            >
+              Been here
+            </button>
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label className="block text-sm text-text-secondary mb-1.5">
+            Notes (optional)
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add a note..."
+            rows={2}
+            className="w-full bg-surface-elevated border border-border rounded-xl px-4 py-3 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon-pink resize-none"
           />
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-text-muted">Icon:</span>
-            <div className="flex flex-wrap gap-1">
-              {EMOJI_OPTIONS.slice(0, 10).map((e) => (
-                <button
-                  key={e}
-                  onClick={() => setNewListEmoji(e)}
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${
-                    newListEmoji === e
-                      ? "bg-neon-cyan/20 ring-1 ring-neon-cyan"
-                      : "bg-surface-elevated"
-                  }`}
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-text-muted">Color:</span>
-            <div className="flex gap-1">
-              {COLOR_OPTIONS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setNewListColor(c)}
-                  className={`w-6 h-6 rounded-full ${
-                    newListColor === c ? "ring-2 ring-white ring-offset-1 ring-offset-surface" : ""
-                  }`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Status */}
-      <div>
-        <label className="block text-sm text-text-secondary mb-1.5">
-          Status
-        </label>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setIsVisited(false)}
-            className={`flex-1 px-4 py-2 rounded-xl text-sm transition-colors ${
-              !isVisited
-                ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan"
-                : "bg-surface-elevated text-text-secondary border border-border"
-            }`}
-          >
-            Want to try
-          </button>
-          <button
-            onClick={() => setIsVisited(true)}
-            className={`flex-1 px-4 py-2 rounded-xl text-sm transition-colors ${
-              isVisited
-                ? "bg-neon-green/20 text-neon-green border border-neon-green"
-                : "bg-surface-elevated text-text-secondary border border-border"
-            }`}
-          >
-            Been here
-          </button>
         </div>
       </div>
 
-      {/* Notes */}
-      <div>
-        <label className="block text-sm text-text-secondary mb-1.5">
-          Notes (optional)
-        </label>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Add a note..."
-          rows={2}
-          className="w-full bg-surface-elevated border border-border rounded-xl px-4 py-3 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon-pink resize-none"
-        />
-      </div>
-
-      {/* Actions */}
-      <div className="flex gap-3 pt-2">
+      {/* Actions - fixed at bottom */}
+      <div className="flex gap-3 pt-4 border-t border-border mt-2">
         <Button variant="ghost" className="flex-1" onClick={onCancel}>
           Cancel
         </Button>
