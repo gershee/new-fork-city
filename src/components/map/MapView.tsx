@@ -25,6 +25,21 @@ interface MapViewProps {
 const NYC_CENTER: [number, number] = [-73.985428, 40.748817];
 const DEFAULT_ZOOM = 12;
 
+// Create emoji marker element
+function createEmojiMarker(emoji: string, color: string, onClick: () => void): HTMLElement {
+  const el = document.createElement("div");
+  el.className = "emoji-marker";
+  el.innerHTML = `
+    <div class="emoji-marker-bg" style="background-color: ${color}"></div>
+    <span class="emoji-marker-icon">${emoji}</span>
+  `;
+  el.addEventListener("click", (e) => {
+    e.stopPropagation();
+    onClick();
+  });
+  return el;
+}
+
 export function MapView({
   pins = [],
   onPinClick,
@@ -36,6 +51,7 @@ export function MapView({
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Use refs to avoid stale closures in event handlers
@@ -179,33 +195,8 @@ export function MapView({
         },
       });
 
-      // Add pin background circles (for visibility and tap target)
-      map.current.addLayer({
-        id: "unclustered-point-bg",
-        type: "circle",
-        source: "pins",
-        filter: ["!", ["has", "point_count"]],
-        paint: {
-          "circle-color": ["get", "color"],
-          "circle-radius": 16,
-          "circle-opacity": 0.25,
-          "circle-blur": 0.5,
-        },
-      });
-
-      // Add individual pin markers as emojis
-      map.current.addLayer({
-        id: "unclustered-point",
-        type: "symbol",
-        source: "pins",
-        filter: ["!", ["has", "point_count"]],
-        layout: {
-          "text-field": ["get", "emoji"],
-          "text-size": 24,
-          "text-allow-overlap": true,
-          "text-ignore-placement": true,
-        },
-      });
+      // Note: Individual pins are rendered as HTML markers (not layers)
+      // This allows proper emoji rendering across all browsers
 
       // Add heatmap source (separate from clustered pins)
       map.current.addSource("heatmap-pins", {
@@ -297,23 +288,13 @@ export function MapView({
       });
     });
 
-    // Handle pin click
-    map.current.on("click", "unclustered-point", (e) => {
-      if (!e.features?.[0]) return;
-      const properties = e.features[0].properties;
-      const pin = pinsRef.current.find((p) => p.id === properties?.id);
-      if (pin && onPinClickRef.current) {
-        onPinClickRef.current(pin);
-      }
-    });
-
     // Handle map click (for adding new pins)
     map.current.on("click", (e) => {
       if (!map.current) return;
 
-      // Check if we clicked on a pin or cluster
+      // Check if we clicked on a cluster
       const features = map.current.queryRenderedFeatures(e.point, {
-        layers: ["clusters", "unclustered-point"],
+        layers: ["clusters"],
       });
 
       if (features.length === 0 && onMapClickRef.current) {
@@ -321,17 +302,11 @@ export function MapView({
       }
     });
 
-    // Change cursor on hover
+    // Change cursor on hover for clusters
     map.current.on("mouseenter", "clusters", () => {
       if (map.current) map.current.getCanvas().style.cursor = "pointer";
     });
     map.current.on("mouseleave", "clusters", () => {
-      if (map.current) map.current.getCanvas().style.cursor = "";
-    });
-    map.current.on("mouseenter", "unclustered-point", () => {
-      if (map.current) map.current.getCanvas().style.cursor = "pointer";
-    });
-    map.current.on("mouseleave", "unclustered-point", () => {
       if (map.current) map.current.getCanvas().style.cursor = "";
     });
 
@@ -359,23 +334,67 @@ export function MapView({
     map.current.easeTo({ center, duration: 1000 });
   }, [center, isLoaded]);
 
+  // Create/update emoji markers when pins change
+  useEffect(() => {
+    if (!map.current || !isLoaded) return;
+
+    const currentMarkers = markersRef.current;
+    const newPinIds = new Set(pins.map((p) => p.id));
+
+    // Remove markers for pins that no longer exist
+    currentMarkers.forEach((marker, id) => {
+      if (!newPinIds.has(id)) {
+        marker.remove();
+        currentMarkers.delete(id);
+      }
+    });
+
+    // Add or update markers for current pins
+    pins.forEach((pin) => {
+      if (!currentMarkers.has(pin.id)) {
+        const emoji = pin.list?.emoji_icon || "📍";
+        const color = pin.list?.color || "#ff2d92";
+        const marker = new mapboxgl.Marker({
+          element: createEmojiMarker(emoji, color, () => {
+            if (onPinClickRef.current) {
+              onPinClickRef.current(pin);
+            }
+          }),
+          anchor: "center",
+        })
+          .setLngLat([pin.lng, pin.lat])
+          .addTo(map.current!);
+
+        currentMarkers.set(pin.id, marker);
+      }
+    });
+  }, [pins, isLoaded]);
+
   // Toggle heatmap visibility
   useEffect(() => {
     if (!map.current || !isLoaded) return;
 
-    const pinLayers = ["clusters", "cluster-count", "unclustered-point", "unclustered-point-bg"];
+    const clusterLayers = ["clusters", "cluster-count"];
 
     if (showHeatmap) {
-      // Show heatmap, hide pins
+      // Show heatmap, hide clusters and markers
       map.current.setLayoutProperty("heatmap-layer", "visibility", "visible");
-      pinLayers.forEach((layer) => {
+      clusterLayers.forEach((layer) => {
         map.current?.setLayoutProperty(layer, "visibility", "none");
       });
+      // Hide emoji markers
+      markersRef.current.forEach((marker) => {
+        marker.getElement().style.display = "none";
+      });
     } else {
-      // Hide heatmap, show pins
+      // Hide heatmap, show clusters and markers
       map.current.setLayoutProperty("heatmap-layer", "visibility", "none");
-      pinLayers.forEach((layer) => {
+      clusterLayers.forEach((layer) => {
         map.current?.setLayoutProperty(layer, "visibility", "visible");
+      });
+      // Show emoji markers
+      markersRef.current.forEach((marker) => {
+        marker.getElement().style.display = "";
       });
     }
   }, [showHeatmap, isLoaded]);
