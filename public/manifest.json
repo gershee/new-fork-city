@@ -1,6 +1,6 @@
 {
-  "name": "NYC.fun",
-  "short_name": "NYC.fun",
+  "name": "New Fork City",
+  "short_name": "New Fork City",
   "description": "Save, curate, and share your favorite NYC spots",
   "start_url": "/explore",
   "display": "standalone",

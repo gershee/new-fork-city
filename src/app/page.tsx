@@ -56,7 +56,7 @@ export default function Home() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="mb-8"
         >
-          <h1 className="text-6xl font-bold gradient-text mb-2">NYC.fun</h1>
+          <h1 className="text-5xl font-bold gradient-text mb-2">New Fork City</h1>
           <p className="text-text-secondary text-lg">
             Your city. Your spots. Your people.
           </p>

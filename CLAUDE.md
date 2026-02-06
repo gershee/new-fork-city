@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-NYC.fun is a mobile-first PWA for saving, curating, and sharing locations via custom lists with social map overlay capabilities. Users can create lists (e.g., "Best Pizza"), save pins with photos/ratings/notes, follow friends, and overlay their lists on their own map view.
+New Fork City is a mobile-first PWA for saving, curating, and sharing locations via custom lists with social map overlay capabilities. Users can create lists (e.g., "Best Pizza"), save pins with photos/ratings/notes, follow friends, and overlay their lists on their own map view.
 
 ## Tech Stack
 

@@ -46,7 +46,7 @@ export default function LoginPage() {
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold gradient-text mb-2">Welcome back</h1>
           <p className="text-text-secondary">
-            Sign in to continue to NYC.fun
+            Sign in to continue to New Fork City
           </p>
         </div>
 

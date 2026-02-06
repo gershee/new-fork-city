@@ -14,14 +14,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NYC.fun - Discover & Share Your Favorite Spots",
+  title: "New Fork City - Discover & Share Your Favorite Spots",
   description:
     "Save, curate, and share your favorite NYC locations. Create custom lists, follow friends, and overlay their recommendations on your map.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "NYC.fun",
+    title: "New Fork City",
   },
 };
 

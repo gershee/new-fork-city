@@ -14,7 +14,7 @@ import { BottomSheet, Button, EmptyState } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import type { Pin, List } from "@/types";
 
-const ENABLED_LAYERS_KEY = "nyc-fun-enabled-layers";
+const ENABLED_LAYERS_KEY = "new-fork-city-enabled-layers";
 
 export default function MapPageWrapper() {
   return (

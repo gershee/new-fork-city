@@ -61,7 +61,7 @@ export default function SearchPage() {
       }
 
       // Load recent searches from localStorage
-      const saved = localStorage.getItem("nyc-fun-recent-searches");
+      const saved = localStorage.getItem("new-fork-city-recent-searches");
       if (saved) {
         try {
           setRecentSearches(JSON.parse(saved));
@@ -169,7 +169,7 @@ export default function SearchPage() {
       ...recentSearches.filter((r) => r.id !== place.id),
     ].slice(0, 5);
     setRecentSearches(updated);
-    localStorage.setItem("nyc-fun-recent-searches", JSON.stringify(updated));
+    localStorage.setItem("new-fork-city-recent-searches", JSON.stringify(updated));
 
     setSelectedPlace(place);
     setShowAddForm(false);
