@@ -143,15 +143,18 @@ export function MapView({
           "bottom-right"
         );
 
-        // Add geolocation control
-        map.current.addControl(
-          new mapboxgl.GeolocateControl({
-            positionOptions: { enableHighAccuracy: true },
-            trackUserLocation: true,
-            showUserHeading: true,
-          }),
-          "bottom-right"
-        );
+        // Add geolocation control with auto-trigger
+        const geolocateControl = new mapboxgl.GeolocateControl({
+          positionOptions: { enableHighAccuracy: true },
+          trackUserLocation: true,
+          showUserHeading: true,
+        });
+        map.current.addControl(geolocateControl, "bottom-right");
+
+        // Auto-trigger geolocation after map loads to show user's location
+        setTimeout(() => {
+          geolocateControl.trigger();
+        }, 500);
       }
 
       // Add pins source

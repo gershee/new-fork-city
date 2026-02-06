@@ -415,27 +415,16 @@ export default function SearchPage() {
             }}
           />
         )}
-        {selectedPlace && showAddForm && lists.length > 0 && (
+        {selectedPlace && showAddForm && (
           <SavePinForm
             place={selectedPlace}
             lists={lists}
             onSave={handleSavePin}
             onCancel={() => setShowAddForm(false)}
-            onCreateList={() => {
-              setSelectedPlace(null);
-              router.push("/lists");
+            onListCreated={(newList) => {
+              setLists((prev) => [newList, ...prev]);
             }}
           />
-        )}
-        {selectedPlace && showAddForm && lists.length === 0 && (
-          <div className="text-center py-6">
-            <p className="text-text-secondary mb-4">
-              Create a list first to save this place
-            </p>
-            <Button variant="primary" onClick={() => router.push("/lists")}>
-              Create a List
-            </Button>
-          </div>
         )}
       </BottomSheet>
     </div>
@@ -544,13 +533,23 @@ function DirectionsIcon() {
   );
 }
 
+const EMOJI_OPTIONS = [
+  "📍", "🍕", "🍔", "🍜", "🍣", "🍷", "🍺", "☕", "🍰", "🌮",
+  "🥗", "🍝", "🥐", "🍦", "🎉", "❤️", "⭐", "🔥", "💎", "🌙",
+];
+
+const COLOR_OPTIONS = [
+  "#ff2d92", "#00f0ff", "#b14eff", "#39ff14",
+  "#ff6b35", "#ffd700", "#ff6b6b", "#4ecdc4",
+];
+
 // Save Pin Form
 function SavePinForm({
   place,
   lists,
   onSave,
   onCancel,
-  onCreateList,
+  onListCreated,
 }: {
   place: SearchResult;
   lists: List[];
@@ -561,17 +560,64 @@ function SavePinForm({
     notes: string
   ) => void;
   onCancel: () => void;
-  onCreateList?: () => void;
+  onListCreated?: (list: List) => void;
 }) {
-  const [selectedListId, setSelectedListId] = useState(lists[0]?.id || "");
+  const [selectedListId, setSelectedListId] = useState(lists[0]?.id || "new");
   const [isVisited, setIsVisited] = useState(false);
   const [rating, setRating] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // New list form state
+  const [newListName, setNewListName] = useState("");
+  const [newListEmoji, setNewListEmoji] = useState("📍");
+  const [newListColor, setNewListColor] = useState("#ff2d92");
+
   const handleSubmit = async () => {
     setIsLoading(true);
-    await onSave(selectedListId, isVisited, rating, notes);
+
+    // If creating a new list
+    if (selectedListId === "new") {
+      if (!newListName.trim()) {
+        setIsLoading(false);
+        return;
+      }
+
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
+
+      const { data: newList, error } = await supabase
+        .from("lists")
+        .insert({
+          user_id: user.id,
+          name: newListName.trim(),
+          emoji_icon: newListEmoji,
+          color: newListColor,
+          is_public: false,
+        })
+        .select()
+        .single();
+
+      if (error || !newList) {
+        console.error("Error creating list:", error);
+        setIsLoading(false);
+        return;
+      }
+
+      // Notify parent about new list
+      onListCreated?.(newList);
+
+      // Save pin to the new list
+      await onSave(newList.id, isVisited, rating, notes);
+    } else {
+      await onSave(selectedListId, isVisited, rating, notes);
+    }
+
     setIsLoading(false);
   };
 
@@ -600,8 +646,65 @@ function SavePinForm({
               <span>{list.name}</span>
             </button>
           ))}
+          <button
+            onClick={() => setSelectedListId("new")}
+            className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors ${
+              selectedListId === "new"
+                ? "bg-neon-cyan text-white"
+                : "bg-surface-elevated text-text-primary border border-border border-dashed"
+            }`}
+          >
+            <span>+</span>
+            <span>New list</span>
+          </button>
         </div>
       </div>
+
+      {/* New List Form */}
+      {selectedListId === "new" && (
+        <div className="space-y-3 p-3 bg-surface rounded-xl">
+          <input
+            type="text"
+            value={newListName}
+            onChange={(e) => setNewListName(e.target.value)}
+            placeholder="List name..."
+            className="w-full bg-surface-elevated border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon-cyan"
+          />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-text-muted">Icon:</span>
+            <div className="flex flex-wrap gap-1">
+              {EMOJI_OPTIONS.slice(0, 10).map((e) => (
+                <button
+                  key={e}
+                  onClick={() => setNewListEmoji(e)}
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${
+                    newListEmoji === e
+                      ? "bg-neon-cyan/20 ring-1 ring-neon-cyan"
+                      : "bg-surface-elevated"
+                  }`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-text-muted">Color:</span>
+            <div className="flex gap-1">
+              {COLOR_OPTIONS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setNewListColor(c)}
+                  className={`w-6 h-6 rounded-full ${
+                    newListColor === c ? "ring-2 ring-white ring-offset-1 ring-offset-surface" : ""
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Status */}
       <div>
@@ -680,9 +783,9 @@ function SavePinForm({
           className="flex-1"
           onClick={handleSubmit}
           isLoading={isLoading}
-          disabled={!selectedListId}
+          disabled={selectedListId === "new" ? !newListName.trim() : !selectedListId}
         >
-          Save to List
+          {selectedListId === "new" ? "Create & Save" : "Save to List"}
         </Button>
       </div>
     </div>
