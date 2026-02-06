@@ -8,6 +8,7 @@ interface BottomSheetProps {
   onClose: () => void;
   children: React.ReactNode;
   title?: string;
+  footer?: React.ReactNode;
   snapPoints?: number[];
   initialSnap?: number;
 }
@@ -17,7 +18,8 @@ export function BottomSheet({
   onClose,
   children,
   title,
-  snapPoints = [0.5, 0.9],
+  footer,
+  snapPoints = [0.9],
   initialSnap = 0,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -94,6 +96,13 @@ export function BottomSheet({
             <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-4 no-scrollbar">
               {children}
             </div>
+
+            {/* Footer - fixed at bottom outside scroll area */}
+            {footer && (
+              <div className="px-6 py-4 border-t border-border bg-surface">
+                {footer}
+              </div>
+            )}
 
             {/* Safe area padding for iOS */}
             <div className="safe-area-bottom" />
