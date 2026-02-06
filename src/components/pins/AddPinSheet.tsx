@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Button, Input, Badge } from "@/components/ui";
+import { Button, Input, Badge, useToast, getRandomToast } from "@/components/ui";
+import { fireConfetti } from "@/components/effects";
 import { createClient } from "@/lib/supabase/client";
 import type { Pin, List } from "@/types";
 
@@ -27,6 +28,7 @@ export function AddPinSheet({
   const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isReverseGeocoding, setIsReverseGeocoding] = useState(true);
+  const { showToast } = useToast();
 
   // Reverse geocode the location
   useEffect(() => {
@@ -84,10 +86,14 @@ export function AddPinSheet({
 
     if (error) {
       console.error("Error creating pin:", error);
+      showToast(getRandomToast("error"));
       setIsLoading(false);
       return;
     }
 
+    // Celebrate the save!
+    fireConfetti("save");
+    showToast(getRandomToast("save"));
     onSuccess(data as Pin);
   };
 

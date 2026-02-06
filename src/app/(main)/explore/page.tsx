@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { MapView } from "@/components/map/MapView";
 import { MapControls } from "@/components/map/MapControls";
 import { HeatmapLegend } from "@/components/map/HeatmapLegend";
@@ -10,7 +10,8 @@ import { LayersSheet } from "@/components/map/LayersSheet";
 import { PinDetail } from "@/components/pins/PinDetail";
 import { AddPinSheet } from "@/components/pins/AddPinSheet";
 import { EditPinForm } from "@/components/pins/EditPinForm";
-import { BottomSheet, Button, EmptyState } from "@/components/ui";
+import { BottomSheet, Button, EmptyState, useToast, getRandomToast } from "@/components/ui";
+import { fireConfetti } from "@/components/effects";
 import { createClient } from "@/lib/supabase/client";
 import type { Pin, List, Profile } from "@/types";
 
@@ -70,6 +71,21 @@ function MapPage() {
   const [savedByData, setSavedByData] = useState<SavedByInfo[]>([]);
   const [isLoadingSavedBy, setIsLoadingSavedBy] = useState(false);
   const [showSaveSheet, setShowSaveSheet] = useState(false);
+  const [isFirstSave, setIsFirstSave] = useState(false);
+  const { showToast } = useToast();
+
+  // Track hot spots count for discover button badge
+  const hotSpotsCount = useMemo(() => {
+    return heatmapPins.filter((p) => {
+      // Count pins at similar location as "hot"
+      const nearby = heatmapPins.filter(
+        (other) =>
+          Math.abs(other.lat - p.lat) < 0.0005 &&
+          Math.abs(other.lng - p.lng) < 0.0005
+      );
+      return nearby.length >= 3;
+    }).length;
+  }, [heatmapPins]);
 
   // Check URL for heatmap param
   useEffect(() => {
@@ -130,6 +146,8 @@ function MapPage() {
 
       if (listsData) {
         setLists(listsData);
+        // Check if this is user's first save (no pins yet)
+        setIsFirstSave(listsData.length === 0);
         if (!savedLayers) {
           const defaultEnabled = new Set(listsData.map((l) => l.id));
           setEnabledLayers(defaultEnabled);
@@ -370,6 +388,31 @@ function MapPage() {
         {showHeatmap && <HeatmapLegend pinCount={heatmapPins.length} />}
       </AnimatePresence>
 
+      {/* Floating Discover Button */}
+      {!showHeatmap && pins.length > 0 && (
+        <motion.button
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.5, type: "spring", stiffness: 300 }}
+          onClick={() => router.push("/trending")}
+          className="fixed bottom-24 right-4 z-20 bg-gradient-to-r from-neon-pink to-neon-cyan p-4 rounded-2xl shadow-lg float-pulse"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🔥</span>
+            <span className="text-white font-semibold text-sm">Discover</span>
+          </div>
+          {hotSpotsCount > 0 && (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+            >
+              {hotSpotsCount > 9 ? "9+" : hotSpotsCount}
+            </motion.div>
+          )}
+        </motion.button>
+      )}
+
       {/* Empty state overlay */}
       {!showHeatmap && pins.length === 0 && lists.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-16">
@@ -431,7 +474,10 @@ function MapPage() {
             onCancel={() => setShowSaveSheet(false)}
             onListCreated={(newList) => {
               setLists((prev) => [newList, ...prev]);
+              setIsFirstSave(false); // They now have at least one list
             }}
+            onShowToast={showToast}
+            isFirstSave={isFirstSave}
           />
         )}
       </BottomSheet>
@@ -506,12 +552,16 @@ function SavePinToListForm({
   onSuccess,
   onCancel,
   onListCreated,
+  onShowToast,
+  isFirstSave,
 }: {
   pin: Pin;
   lists: List[];
   onSuccess: () => void;
   onCancel: () => void;
   onListCreated?: (list: List) => void;
+  onShowToast?: (toast: { message: string; emoji?: string; subtext?: string }) => void;
+  isFirstSave?: boolean;
 }) {
   const [selectedListId, setSelectedListId] = useState(lists[0]?.id || "new");
   const [isVisited, setIsVisited] = useState(false);
@@ -528,6 +578,7 @@ function SavePinToListForm({
     if (!user) { setIsLoading(false); return; }
 
     let targetListId = selectedListId;
+    let createdNewList = false;
 
     if (selectedListId === "new") {
       if (!newListName.trim()) { setIsLoading(false); return; }
@@ -538,12 +589,25 @@ function SavePinToListForm({
       if (error || !newList) { setIsLoading(false); return; }
       onListCreated?.(newList);
       targetListId = newList.id;
+      createdNewList = true;
     }
 
     await supabase.from("pins").insert({
       user_id: user.id, list_id: targetListId, name: pin.name, address: pin.address,
       lat: pin.lat, lng: pin.lng, category: pin.category, is_visited: isVisited, personal_notes: notes || null,
     });
+
+    // Fire celebration effects
+    if (isFirstSave) {
+      fireConfetti("milestone");
+      onShowToast?.(getRandomToast("firstSave"));
+    } else if (createdNewList) {
+      fireConfetti("list");
+      onShowToast?.(getRandomToast("listCreated"));
+    } else {
+      fireConfetti("save");
+      onShowToast?.(getRandomToast("save"));
+    }
 
     setIsLoading(false);
     onSuccess();

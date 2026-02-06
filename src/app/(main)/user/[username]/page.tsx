@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "@/components/ui";
+import { Button, useToast, getRandomToast } from "@/components/ui";
+import { fireConfetti } from "@/components/effects";
+import { triggerHaptic } from "@/lib/haptics";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, List } from "@/types";
 
@@ -25,6 +27,7 @@ export default function UserProfilePage() {
   const [lists, setLists] = useState<(List & { pins_count: number })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -135,6 +138,7 @@ export default function UserProfilePage() {
         .eq("follower_id", user.id)
         .eq("following_id", profile.id);
 
+      triggerHaptic("light");
       setProfile({
         ...profile,
         is_following: false,
@@ -147,6 +151,9 @@ export default function UserProfilePage() {
         following_id: profile.id,
       });
 
+      // Celebrate new follow!
+      fireConfetti("follow");
+      showToast(getRandomToast("follow"));
       setProfile({
         ...profile,
         is_following: true,

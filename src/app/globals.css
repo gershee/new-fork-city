@@ -306,3 +306,180 @@ body {
   z-index: 1;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
+
+/* ========== FUN ANIMATIONS ========== */
+
+/* Hot glow pulse animation */
+@keyframes hot-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(251, 146, 60, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px 4px rgba(251, 146, 60, 0.3);
+  }
+}
+
+.hot-glow {
+  animation: hot-glow-pulse 2s ease-in-out infinite;
+}
+
+/* Shimmer effect */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  animation: shimmer 1.5s linear infinite;
+}
+
+/* Bounce animation for markers */
+@keyframes marker-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.marker-bounce {
+  animation: marker-bounce 0.5s ease-out;
+}
+
+/* Heart burst animation */
+@keyframes heart-burst {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.heart-burst {
+  animation: heart-burst 0.3s ease-out;
+}
+
+/* Rising fast indicator */
+@keyframes rising-arrow {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 0.7;
+  }
+}
+
+.rising-arrow {
+  animation: rising-arrow 1s ease-in-out infinite;
+}
+
+/* Gradient border animation */
+@keyframes gradient-border {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.gradient-border-animated {
+  background: linear-gradient(
+    90deg,
+    var(--neon-orange),
+    var(--neon-pink),
+    var(--neon-purple),
+    var(--neon-cyan),
+    var(--neon-orange)
+  );
+  background-size: 300% 100%;
+  animation: gradient-border 3s linear infinite;
+}
+
+/* Skeleton loading with shimmer */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-elevated) 0%,
+    var(--surface-hover) 50%,
+    var(--surface-elevated) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Hot spot marker glow */
+.hot-marker {
+  position: relative;
+}
+
+.hot-marker::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(251, 146, 60, 0.4), transparent 70%);
+  animation: hot-glow-pulse 2s ease-in-out infinite;
+}
+
+/* Floating button pulse */
+@keyframes float-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 4px 20px rgba(240, 78, 140, 0.3);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 6px 30px rgba(240, 78, 140, 0.4);
+  }
+}
+
+.float-pulse {
+  animation: float-pulse 2s ease-in-out infinite;
+}
+
+/* Stacked avatars */
+.avatar-stack {
+  display: flex;
+}
+
+.avatar-stack > * {
+  margin-left: -8px;
+  border: 2px solid var(--surface);
+  border-radius: 9999px;
+}
+
+.avatar-stack > *:first-child {
+  margin-left: 0;
+}

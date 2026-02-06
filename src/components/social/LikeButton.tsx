@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
+import { triggerHaptic } from "@/lib/haptics";
 
 interface LikeButtonProps {
   type: "list" | "pin";
@@ -59,7 +60,10 @@ export function LikeButton({
 
     if (newLiked) {
       setIsAnimating(true);
+      triggerHaptic("medium");
       setTimeout(() => setIsAnimating(false), 500);
+    } else {
+      triggerHaptic("light");
     }
 
     try {
@@ -143,16 +147,40 @@ export function LikeButton({
           </motion.div>
         </AnimatePresence>
 
-        {/* Burst animation */}
+        {/* Enhanced burst animation with particles */}
         {isAnimating && (
-          <motion.div
-            className="absolute inset-0 pointer-events-none"
-            initial={{ scale: 0.5, opacity: 1 }}
-            animate={{ scale: 2, opacity: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <div className="w-full h-full rounded-full bg-red-500/30" />
-          </motion.div>
+          <>
+            {/* Ring burst */}
+            <motion.div
+              className="absolute inset-0 pointer-events-none"
+              initial={{ scale: 0.5, opacity: 1 }}
+              animate={{ scale: 2.5, opacity: 0 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+            >
+              <div className="w-full h-full rounded-full border-2 border-red-500/50" />
+            </motion.div>
+            {/* Particle burst */}
+            {[...Array(6)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-1.5 h-1.5 bg-red-500 rounded-full pointer-events-none"
+                style={{
+                  left: "50%",
+                  top: "50%",
+                  marginLeft: -3,
+                  marginTop: -3,
+                }}
+                initial={{ scale: 1, opacity: 1, x: 0, y: 0 }}
+                animate={{
+                  scale: 0,
+                  opacity: 0,
+                  x: Math.cos((i * 60 * Math.PI) / 180) * 25,
+                  y: Math.sin((i * 60 * Math.PI) / 180) * 25,
+                }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+              />
+            ))}
+          </>
         )}
       </motion.button>
 

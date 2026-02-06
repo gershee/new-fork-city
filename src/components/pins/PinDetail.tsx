@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { Button, Avatar, Badge, Card } from "@/components/ui";
+import { ShimmerEffect, HotGlowRing } from "@/components/effects";
 import type { Pin, List, Profile } from "@/types";
 
 interface SavedByInfo {
@@ -40,22 +42,37 @@ export function PinDetail({ pin, isOwn, onEdit, savedBy = [], isLoadingSavedBy, 
     <div className="space-y-4">
       {/* Viral meter / popularity indicator */}
       {viralLevel && (
-        <div className="bg-surface rounded-xl p-3">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`bg-surface rounded-xl p-3 relative overflow-hidden ${totalSaves >= 10 ? "hot-glow" : ""}`}
+        >
+          {/* Hot spot glow ring */}
+          {totalSaves >= 10 && <HotGlowRing className="rounded-xl" />}
+
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-sm font-medium ${viralLevel.color}`}>
+            <motion.span
+              className={`text-sm font-medium ${viralLevel.color} flex items-center gap-1.5`}
+              animate={totalSaves >= 10 ? { scale: [1, 1.05, 1] } : {}}
+              transition={{ duration: 1, repeat: Infinity }}
+            >
               {viralLevel.label}
-            </span>
+            </motion.span>
             <span className="text-xs text-text-muted">
               Saved by {totalSaves} {totalSaves === 1 ? "person" : "people"}
             </span>
           </div>
-          <div className="h-1.5 bg-surface-elevated rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-neon-cyan via-neon-pink to-orange-400 rounded-full transition-all duration-500"
-              style={{ width: `${viralLevel.percent}%` }}
-            />
+          <div className="h-1.5 bg-surface-elevated rounded-full overflow-hidden relative">
+            <motion.div
+              className="h-full bg-gradient-to-r from-neon-cyan via-neon-pink to-orange-400 rounded-full relative overflow-hidden"
+              initial={{ width: 0 }}
+              animate={{ width: `${viralLevel.percent}%` }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+            >
+              <ShimmerEffect />
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Owner info for friend's pins */}
@@ -112,19 +129,52 @@ export function PinDetail({ pin, isOwn, onEdit, savedBy = [], isLoadingSavedBy, 
         </Card>
       )}
 
-      {/* Also saved by section */}
+      {/* Also saved by section with stacked avatars */}
       {(savedBy.length > 0 || isLoadingSavedBy) && (
-        <div>
-          <p className="text-sm text-text-secondary mb-2">Also saved by</p>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-text-secondary">Also saved by</p>
+            {savedBy.length > 0 && !isLoadingSavedBy && (
+              <div className="avatar-stack flex items-center">
+                {savedBy.slice(0, 4).map(({ owner }, i) => (
+                  <motion.div
+                    key={owner.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                  >
+                    <Avatar
+                      src={owner.avatar_url}
+                      alt={owner.display_name || owner.username}
+                      fallback={(owner.display_name || owner.username)?.[0]}
+                      size="xs"
+                    />
+                  </motion.div>
+                ))}
+                {savedBy.length > 4 && (
+                  <div className="w-6 h-6 rounded-full bg-surface-elevated border-2 border-surface flex items-center justify-center text-xs text-text-muted font-medium ml-[-8px]">
+                    +{savedBy.length - 4}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           {isLoadingSavedBy ? (
             <div className="flex items-center justify-center py-3">
               <div className="w-4 h-4 border-2 border-neon-pink border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             <div className="space-y-2">
-              {savedBy.slice(0, 5).map(({ pin: savedPin, list, owner }) => (
-                <button
+              {savedBy.slice(0, 5).map(({ pin: savedPin, list, owner }, index) => (
+                <motion.button
                   key={savedPin.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
                   onClick={() => router.push(`/user/${owner.username}`)}
                   className="w-full flex items-center gap-3 p-2.5 bg-surface rounded-lg hover:bg-surface-hover transition-colors"
                 >
@@ -143,7 +193,7 @@ export function PinDetail({ pin, isOwn, onEdit, savedBy = [], isLoadingSavedBy, 
                     </p>
                   </div>
                   <ChevronRightIcon />
-                </button>
+                </motion.button>
               ))}
               {savedBy.length > 5 && (
                 <p className="text-xs text-text-muted text-center pt-1">
@@ -152,7 +202,7 @@ export function PinDetail({ pin, isOwn, onEdit, savedBy = [], isLoadingSavedBy, 
               )}
             </div>
           )}
-        </div>
+        </motion.div>
       )}
 
       {/* Actions */}

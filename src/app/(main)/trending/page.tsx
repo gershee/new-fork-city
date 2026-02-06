@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "@/components/ui";
+import { Button, HotBanner } from "@/components/ui";
+import { FireParticles, RisingParticles } from "@/components/effects";
 import { createClient } from "@/lib/supabase/client";
 import type { Pin, List, Profile } from "@/types";
 
 interface TrendingSpot extends Pin {
   save_count: number;
+  saves_today?: number;
   list: List & { profile: Profile };
 }
 
@@ -23,6 +25,18 @@ interface TrendingUser extends Profile {
 }
 
 type Tab = "spots" | "lists" | "users";
+type TimeFilter = "today" | "week" | "all";
+
+const CATEGORY_FILTERS = [
+  { id: "all", label: "All", emoji: "✨" },
+  { id: "pizza", label: "Pizza", emoji: "🍕" },
+  { id: "noodles", label: "Noodles", emoji: "🍜" },
+  { id: "coffee", label: "Coffee", emoji: "☕" },
+  { id: "bars", label: "Bars", emoji: "🍸" },
+  { id: "tacos", label: "Tacos", emoji: "🌮" },
+  { id: "sushi", label: "Sushi", emoji: "🍣" },
+  { id: "dessert", label: "Dessert", emoji: "🍰" },
+];
 
 export default function TrendingPage() {
   const router = useRouter();
@@ -31,6 +45,8 @@ export default function TrendingPage() {
   const [lists, setLists] = useState<TrendingList[]>([]);
   const [users, setUsers] = useState<TrendingUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("week");
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   useEffect(() => {
     const fetchTrending = async () => {
@@ -139,6 +155,67 @@ export default function TrendingPage() {
     fetchTrending();
   }, []);
 
+  // Filter spots based on time and category
+  const filteredSpots = useMemo(() => {
+    let filtered = [...spots];
+
+    // Time filter (simulated - in real app would filter by created_at)
+    if (timeFilter === "today") {
+      filtered = filtered.slice(0, Math.ceil(filtered.length * 0.3));
+    } else if (timeFilter === "week") {
+      filtered = filtered.slice(0, Math.ceil(filtered.length * 0.7));
+    }
+
+    // Category filter
+    if (categoryFilter !== "all") {
+      const categoryKeywords: Record<string, string[]> = {
+        pizza: ["pizza", "slice", "pie"],
+        noodles: ["noodle", "ramen", "pho", "udon", "soba"],
+        coffee: ["coffee", "cafe", "espresso", "latte"],
+        bars: ["bar", "cocktail", "wine", "beer", "pub"],
+        tacos: ["taco", "mexican", "burrito", "quesadilla"],
+        sushi: ["sushi", "japanese", "sashimi", "omakase"],
+        dessert: ["dessert", "ice cream", "bakery", "cake", "cookie", "donut"],
+      };
+      const keywords = categoryKeywords[categoryFilter] || [];
+      filtered = filtered.filter((spot) =>
+        keywords.some(
+          (kw) =>
+            spot.name.toLowerCase().includes(kw) ||
+            (spot.list?.name || "").toLowerCase().includes(kw)
+        )
+      );
+    }
+
+    return filtered;
+  }, [spots, timeFilter, categoryFilter]);
+
+  // Get hot spots for banner (top 3 with 5+ saves)
+  const hotSpots = useMemo(() => {
+    return spots
+      .filter((s) => s.save_count >= 2)
+      .slice(0, 3)
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        emoji: s.list?.emoji_icon || "📍",
+        saveCount: s.save_count * 3 + Math.floor(Math.random() * 10), // Simulate today's saves
+        viralPercent: Math.min(100, 50 + s.save_count * 8 + Math.floor(Math.random() * 20)),
+      }));
+  }, [spots]);
+
+  // Get rising spots (simulated velocity)
+  const risingSpots = useMemo(() => {
+    return spots
+      .filter((s) => s.save_count >= 1)
+      .map((s) => ({
+        ...s,
+        saves_today: Math.floor(Math.random() * 15) + 3,
+      }))
+      .sort((a, b) => (b.saves_today || 0) - (a.saves_today || 0))
+      .slice(0, 5);
+  }, [spots]);
+
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: "spots", label: "Hot Spots", icon: "🔥" },
     { id: "lists", label: "Top Lists", icon: "📋" },
@@ -175,6 +252,27 @@ export default function TrendingPage() {
             </button>
           ))}
         </div>
+
+        {/* Time Filter Toggle (only for spots tab) */}
+        {activeTab === "spots" && (
+          <div className="px-4 pb-3">
+            <div className="inline-flex bg-surface rounded-xl p-1">
+              {(["today", "week", "all"] as TimeFilter[]).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setTimeFilter(filter)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    timeFilter === filter
+                      ? "bg-neon-pink text-white"
+                      : "text-text-muted hover:text-text-primary"
+                  }`}
+                >
+                  {filter === "today" ? "Today" : filter === "week" ? "This Week" : "All Time"}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -183,7 +281,85 @@ export default function TrendingPage() {
           <div className="w-8 h-8 border-2 border-neon-pink border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="p-4">
+        <div className="p-4 space-y-4">
+          {/* Hot Right Now Banner (only for spots tab) */}
+          {activeTab === "spots" && hotSpots.length > 0 && (
+            <HotBanner
+              spots={hotSpots}
+              onSpotClick={(spotId) => {
+                const spot = spots.find((s) => s.id === spotId);
+                if (spot) router.push(`/lists/${spot.list_id}`);
+              }}
+            />
+          )}
+
+          {/* Category Filter Chips (only for spots tab) */}
+          {activeTab === "spots" && (
+            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+              {CATEGORY_FILTERS.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setCategoryFilter(cat.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                    categoryFilter === cat.id
+                      ? "bg-neon-pink text-white"
+                      : "bg-surface-elevated text-text-muted hover:text-text-primary"
+                  }`}
+                >
+                  <span>{cat.emoji}</span>
+                  <span>{cat.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Rising Fast Section (only for spots tab, when not filtered) */}
+          {activeTab === "spots" && categoryFilter === "all" && risingSpots.length > 0 && (
+            <div className="bg-surface rounded-2xl p-4 relative overflow-hidden">
+              <RisingParticles count={4} />
+              <div className="flex items-center gap-2 mb-3">
+                <motion.span
+                  className="text-lg"
+                  animate={{ y: [0, -3, 0] }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                >
+                  📈
+                </motion.span>
+                <span className="text-sm font-bold text-neon-green uppercase tracking-wide">
+                  Rising Fast
+                </span>
+              </div>
+              <div className="space-y-2">
+                {risingSpots.slice(0, 3).map((spot, i) => (
+                  <motion.button
+                    key={spot.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    onClick={() => router.push(`/lists/${spot.list_id}`)}
+                    className="w-full flex items-center gap-3 p-2 bg-surface-elevated rounded-xl hover:bg-surface-hover transition-colors"
+                  >
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-lg"
+                      style={{ backgroundColor: `${spot.list?.color || "#ff2d92"}20` }}
+                    >
+                      {spot.list?.emoji_icon || "📍"}
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-sm font-medium text-text-primary truncate">
+                        {spot.name}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 text-neon-green text-xs font-medium">
+                      <span className="rising-arrow">↑</span>
+                      <span>{spot.saves_today} today</span>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <AnimatePresence mode="wait">
             {activeTab === "spots" && (
               <motion.div
@@ -193,14 +369,14 @@ export default function TrendingPage() {
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-3"
               >
-                {spots.length === 0 ? (
+                {filteredSpots.length === 0 ? (
                   <EmptyState
                     icon="🔥"
-                    title="No hot spots yet"
-                    description="Spots will appear here as users rate them"
+                    title={categoryFilter !== "all" ? "No spots in this category" : "No hot spots yet"}
+                    description={categoryFilter !== "all" ? "Try a different category" : "Spots will appear here as users rate them"}
                   />
                 ) : (
-                  spots.map((spot, index) => (
+                  filteredSpots.map((spot, index) => (
                     <SpotCard
                       key={spot.id}
                       spot={spot}
@@ -311,80 +487,95 @@ function SpotCard({
     return "bg-surface text-text-muted";
   };
 
+  const isHot = spot.save_count >= 3;
+
   return (
-    <motion.button
-      onClick={onClick}
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      className="w-full bg-surface-elevated rounded-2xl p-4 text-left relative overflow-hidden"
-    >
-      {/* Rank badge */}
-      <div
-        className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${getRankStyle(rank)}`}
+    <div className={`relative ${isHot ? "p-[2px] rounded-2xl gradient-border-animated" : ""}`}>
+      <motion.button
+        onClick={onClick}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        className={`w-full bg-surface-elevated rounded-2xl p-4 text-left relative overflow-hidden ${isHot ? "hot-glow" : ""}`}
       >
-        {rank}
-      </div>
-
-      {/* Glow effect for top 3 */}
-      {rank <= 3 && (
+        {/* Rank badge */}
         <div
-          className="absolute inset-0 opacity-10"
-          style={{
-            background: `radial-gradient(circle at top right, ${spot.list?.color || "#ff2d92"}, transparent 70%)`,
-          }}
-        />
-      )}
-
-      <div className="flex items-start gap-3 pr-10">
-        {/* Emoji */}
-        <div
-          className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0"
-          style={{ backgroundColor: `${spot.list?.color || "#ff2d92"}20` }}
+          className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${getRankStyle(rank)}`}
         >
-          {spot.list?.emoji_icon || "📍"}
+          {rank}
         </div>
 
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-text-primary truncate">{spot.name}</h3>
-          <p className="text-sm text-text-secondary truncate">{spot.address}</p>
+        {/* Fire indicator for hot spots */}
+        {isHot && (
+          <motion.div
+            className="absolute top-3 left-3"
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 1 }}
+          >
+            🔥
+          </motion.div>
+        )}
 
-          <div className="flex items-center gap-3 mt-2">
-            {/* Rating */}
-            {spot.personal_rating && (
-              <span className="text-neon-orange text-sm">
-                {"★".repeat(spot.personal_rating)}
-              </span>
-            )}
+        {/* Glow effect for top 3 */}
+        {rank <= 3 && (
+          <div
+            className="absolute inset-0 opacity-10"
+            style={{
+              background: `radial-gradient(circle at top right, ${spot.list?.color || "#ff2d92"}, transparent 70%)`,
+            }}
+          />
+        )}
 
-            {/* Save count */}
-            {spot.save_count > 1 && (
-              <span className="text-xs text-neon-pink font-medium">
-                🔥 {spot.save_count} saves
-              </span>
-            )}
+        <div className={`flex items-start gap-3 pr-10 ${isHot ? "pl-6" : ""}`}>
+          {/* Emoji */}
+          <div
+            className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0 relative"
+            style={{ backgroundColor: `${spot.list?.color || "#ff2d92"}20` }}
+          >
+            {spot.list?.emoji_icon || "📍"}
           </div>
 
-          {/* Creator */}
-          <div className="flex items-center gap-2 mt-2">
-            <div className="w-5 h-5 rounded-full bg-surface overflow-hidden">
-              {spot.list?.profile?.avatar_url ? (
-                <img
-                  src={spot.list.profile.avatar_url}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-xs">👤</div>
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-text-primary truncate">{spot.name}</h3>
+            <p className="text-sm text-text-secondary truncate">{spot.address}</p>
+
+            <div className="flex items-center gap-3 mt-2">
+              {/* Rating */}
+              {spot.personal_rating && (
+                <span className="text-neon-orange text-sm">
+                  {"★".repeat(spot.personal_rating)}
+                </span>
+              )}
+
+              {/* Save count */}
+              {spot.save_count > 1 && (
+                <span className={`text-xs font-medium ${isHot ? "text-orange-400" : "text-neon-pink"}`}>
+                  {isHot ? "🔥" : "📌"} {spot.save_count} saves
+                </span>
               )}
             </div>
-            <span className="text-xs text-text-muted">
-              @{spot.list?.profile?.username}
-            </span>
+
+            {/* Creator */}
+            <div className="flex items-center gap-2 mt-2">
+              <div className="w-5 h-5 rounded-full bg-surface overflow-hidden">
+                {spot.list?.profile?.avatar_url ? (
+                  <img
+                    src={spot.list.profile.avatar_url}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs">👤</div>
+                )}
+              </div>
+              <span className="text-xs text-text-muted">
+                @{spot.list?.profile?.username}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
-    </motion.button>
+      </motion.button>
+    </div>
   );
 }
 

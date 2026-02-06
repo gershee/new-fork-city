@@ -45,6 +45,36 @@ export default function ListDetailPage() {
   const [showSavePin, setShowSavePin] = useState(false);
   const [savingPin, setSavingPin] = useState<Pin | null>(null);
 
+  // Multi-select state
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedPinIds, setSelectedPinIds] = useState<Set<string>>(new Set());
+  const [showBatchSave, setShowBatchSave] = useState(false);
+
+  const togglePinSelection = (pinId: string) => {
+    setSelectedPinIds(prev => {
+      const next = new Set(prev);
+      if (next.has(pinId)) {
+        next.delete(pinId);
+      } else {
+        next.add(pinId);
+      }
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedPinIds(new Set(pins.map(p => p.id)));
+  };
+
+  const deselectAll = () => {
+    setSelectedPinIds(new Set());
+  };
+
+  const exitSelectMode = () => {
+    setIsSelectMode(false);
+    setSelectedPinIds(new Set());
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       const supabase = createClient();
@@ -333,6 +363,29 @@ export default function ListDetailPage() {
           </div>
         </div>
 
+        {/* Selection Mode Header */}
+        {isSelectMode && (
+          <div className="flex items-center justify-between px-4 pb-2">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={exitSelectMode}
+                className="text-sm text-text-muted hover:text-text-primary"
+              >
+                Cancel
+              </button>
+              <span className="text-sm text-text-primary font-medium">
+                {selectedPinIds.size} selected
+              </span>
+            </div>
+            <button
+              onClick={selectedPinIds.size === pins.length ? deselectAll : selectAll}
+              className="text-sm text-neon-cyan"
+            >
+              {selectedPinIds.size === pins.length ? "Deselect all" : "Select all"}
+            </button>
+          </div>
+        )}
+
         {/* View Toggle */}
         <div className="flex gap-2 px-4 pb-3">
           <button
@@ -355,6 +408,14 @@ export default function ListDetailPage() {
           >
             Map
           </button>
+          {!isSelectMode && pins.length > 0 && (
+            <button
+              onClick={() => setIsSelectMode(true)}
+              className="px-3 py-2 rounded-xl text-sm font-medium bg-neon-purple/20 text-neon-purple hover:bg-neon-purple/30 transition-colors"
+            >
+              Select
+            </button>
+          )}
         </div>
       </div>
 
@@ -383,10 +444,24 @@ export default function ListDetailPage() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    onClick={() => setSelectedPin(pin)}
-                    className="bg-surface-elevated rounded-xl p-4 cursor-pointer hover:bg-surface-hover transition-colors"
+                    onClick={() => isSelectMode ? togglePinSelection(pin.id) : setSelectedPin(pin)}
+                    className={`bg-surface-elevated rounded-xl p-4 cursor-pointer hover:bg-surface-hover transition-colors ${
+                      selectedPinIds.has(pin.id) ? "ring-2 ring-neon-pink" : ""
+                    }`}
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      {/* Checkbox in select mode */}
+                      {isSelectMode && (
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                          selectedPinIds.has(pin.id)
+                            ? "bg-neon-pink border-neon-pink"
+                            : "border-border"
+                        }`}>
+                          {selectedPinIds.has(pin.id) && (
+                            <CheckIcon className="w-4 h-4 text-white" />
+                          )}
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-text-primary truncate">
                           {pin.name}
@@ -433,6 +508,71 @@ export default function ListDetailPage() {
           />
         </div>
       )}
+
+      {/* Floating Action Bar for Selection */}
+      <AnimatePresence>
+        {isSelectMode && selectedPinIds.size > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-20 left-4 right-4 z-40 bg-surface-elevated rounded-2xl p-4 shadow-lg border border-border"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-text-secondary">
+                {selectedPinIds.size} {selectedPinIds.size === 1 ? "spot" : "spots"} selected
+              </span>
+              <div className="flex gap-2">
+                {isOwner && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={async () => {
+                      if (confirm(`Delete ${selectedPinIds.size} spots?`)) {
+                        const supabase = createClient();
+                        await supabase.from("pins").delete().in("id", [...selectedPinIds]);
+                        setPins(prev => prev.filter(p => !selectedPinIds.has(p.id)));
+                        exitSelectMode();
+                      }
+                    }}
+                    className="text-red-400"
+                  >
+                    Delete
+                  </Button>
+                )}
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowBatchSave(true)}
+                >
+                  {isOwner ? "Move to list" : "Save to my list"}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Batch Save Sheet */}
+      <BottomSheet
+        isOpen={showBatchSave}
+        onClose={() => setShowBatchSave(false)}
+        title={`Save ${selectedPinIds.size} spots`}
+      >
+        <BatchSaveForm
+          selectedPins={pins.filter(p => selectedPinIds.has(p.id))}
+          lists={allLists}
+          isOwner={isOwner}
+          onSuccess={() => {
+            setShowBatchSave(false);
+            exitSelectMode();
+          }}
+          onCancel={() => setShowBatchSave(false)}
+          onListCreated={(newList) => {
+            setAllLists(prev => [newList, ...prev]);
+          }}
+        />
+      </BottomSheet>
 
       {/* Pin Detail Sheet */}
       <BottomSheet
@@ -989,6 +1129,22 @@ function CopyIcon({ className }: { className?: string }) {
   );
 }
 
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
 // Pin Like Button - fetches its own like state
 function PinLikeButton({ pinId }: { pinId: string }) {
   const [isLiked, setIsLiked] = useState(false);
@@ -1276,6 +1432,249 @@ function SavePinToListForm({
           disabled={selectedListId === "new" ? !newListName.trim() : !selectedListId}
         >
           {selectedListId === "new" ? "Create & Save" : "Save"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Batch Save Form - for saving multiple pins at once
+function BatchSaveForm({
+  selectedPins,
+  lists,
+  isOwner,
+  onSuccess,
+  onCancel,
+  onListCreated,
+}: {
+  selectedPins: Pin[];
+  lists: List[];
+  isOwner: boolean;
+  onSuccess: () => void;
+  onCancel: () => void;
+  onListCreated?: (list: List) => void;
+}) {
+  const [selectedListId, setSelectedListId] = useState(lists[0]?.id || "new");
+  const [isLoading, setIsLoading] = useState(false);
+  const [deleteAfterMove, setDeleteAfterMove] = useState(false);
+
+  // New list form state
+  const [newListName, setNewListName] = useState("");
+  const [newListEmoji, setNewListEmoji] = useState("📍");
+  const [newListColor, setNewListColor] = useState("#ff2d92");
+
+  const handleSubmit = async () => {
+    setIsLoading(true);
+
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    let targetListId = selectedListId;
+
+    // If creating a new list
+    if (selectedListId === "new") {
+      if (!newListName.trim()) {
+        setIsLoading(false);
+        return;
+      }
+
+      const { data: newList, error } = await supabase
+        .from("lists")
+        .insert({
+          user_id: user.id,
+          name: newListName.trim(),
+          emoji_icon: newListEmoji,
+          color: newListColor,
+          is_public: false,
+        })
+        .select()
+        .single();
+
+      if (error || !newList) {
+        console.error("Error creating list:", error);
+        setIsLoading(false);
+        return;
+      }
+
+      onListCreated?.(newList);
+      targetListId = newList.id;
+    }
+
+    // Create all pins in the target list
+    const pinsToInsert = selectedPins.map((pin) => ({
+      user_id: user.id,
+      list_id: targetListId,
+      name: pin.name,
+      address: pin.address,
+      lat: pin.lat,
+      lng: pin.lng,
+      category: pin.category,
+      is_visited: isOwner ? pin.is_visited : false,
+      personal_notes: isOwner ? pin.personal_notes : null,
+      personal_rating: isOwner ? pin.personal_rating : null,
+    }));
+
+    const { error: insertError } = await supabase.from("pins").insert(pinsToInsert);
+
+    if (insertError) {
+      console.error("Error saving pins:", insertError);
+      setIsLoading(false);
+      return;
+    }
+
+    // If owner chose to delete original pins after moving
+    if (isOwner && deleteAfterMove) {
+      const pinIds = selectedPins.map((p) => p.id);
+      await supabase.from("pins").delete().in("id", pinIds);
+    }
+
+    setIsLoading(false);
+    onSuccess();
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Selected Pins Preview */}
+      <div className="bg-surface rounded-xl p-3">
+        <p className="text-sm text-text-secondary mb-2">
+          {selectedPins.length} {selectedPins.length === 1 ? "spot" : "spots"} selected
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {selectedPins.slice(0, 5).map((pin) => (
+            <span
+              key={pin.id}
+              className="text-xs bg-surface-elevated px-2 py-1 rounded-full text-text-primary truncate max-w-[120px]"
+            >
+              {pin.name}
+            </span>
+          ))}
+          {selectedPins.length > 5 && (
+            <span className="text-xs bg-surface-elevated px-2 py-1 rounded-full text-text-muted">
+              +{selectedPins.length - 5} more
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* List Selection */}
+      <div>
+        <label className="block text-sm text-text-secondary mb-1.5">
+          {isOwner ? "Move to list" : "Save to list"}
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {lists.map((list) => (
+            <button
+              key={list.id}
+              onClick={() => setSelectedListId(list.id)}
+              className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors ${
+                selectedListId === list.id
+                  ? "bg-neon-pink text-white"
+                  : "bg-surface-elevated text-text-primary border border-border"
+              }`}
+            >
+              <span>{list.emoji_icon}</span>
+              <span>{list.name}</span>
+            </button>
+          ))}
+          <button
+            onClick={() => setSelectedListId("new")}
+            className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors ${
+              selectedListId === "new"
+                ? "bg-neon-cyan text-white"
+                : "bg-surface-elevated text-text-primary border border-border border-dashed"
+            }`}
+          >
+            <span>+</span>
+            <span>New list</span>
+          </button>
+        </div>
+      </div>
+
+      {/* New List Form */}
+      {selectedListId === "new" && (
+        <div className="space-y-3 p-3 bg-surface rounded-xl">
+          <input
+            type="text"
+            value={newListName}
+            onChange={(e) => setNewListName(e.target.value)}
+            placeholder="List name..."
+            className="w-full bg-surface-elevated border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon-cyan"
+          />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-text-muted">Icon:</span>
+            <div className="flex flex-wrap gap-1">
+              {EMOJI_OPTIONS.slice(0, 10).map((e) => (
+                <button
+                  key={e}
+                  onClick={() => setNewListEmoji(e)}
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${
+                    newListEmoji === e
+                      ? "bg-neon-cyan/20 ring-1 ring-neon-cyan"
+                      : "bg-surface-elevated"
+                  }`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-text-muted">Color:</span>
+            <div className="flex gap-1">
+              {COLOR_OPTIONS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setNewListColor(c)}
+                  className={`w-6 h-6 rounded-full ${
+                    newListColor === c ? "ring-2 ring-white ring-offset-1 ring-offset-surface" : ""
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move option for owner */}
+      {isOwner && (
+        <button
+          onClick={() => setDeleteAfterMove(!deleteAfterMove)}
+          className="flex items-center gap-3 w-full p-3 bg-surface rounded-xl"
+        >
+          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+            deleteAfterMove
+              ? "bg-neon-pink border-neon-pink"
+              : "border-border"
+          }`}>
+            {deleteAfterMove && <CheckIcon className="w-3 h-3 text-white" />}
+          </div>
+          <span className="text-sm text-text-primary">
+            Delete from current list after moving
+          </span>
+        </button>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-3 pt-2 sticky bottom-0 bg-surface pb-2">
+        <Button variant="ghost" className="flex-1" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          className="flex-1"
+          onClick={handleSubmit}
+          isLoading={isLoading}
+          disabled={selectedListId === "new" ? !newListName.trim() : !selectedListId}
+        >
+          {selectedListId === "new"
+            ? `Create & ${isOwner ? "Move" : "Save"}`
+            : isOwner ? "Move" : "Save"}
         </Button>
       </div>
     </div>

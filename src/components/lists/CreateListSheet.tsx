@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, useToast, getRandomToast } from "@/components/ui";
+import { fireConfetti } from "@/components/effects";
 
 const EMOJI_OPTIONS = [
   "📍", "🍕", "🍔", "🍜", "🍣", "🍷", "🍺", "☕", "🍰", "🌮",
@@ -30,11 +31,15 @@ export function CreateListSheet({ onSubmit, onCancel }: CreateListSheetProps) {
   const [color, setColor] = useState("#f04e8c");
   const [isPublic, setIsPublic] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const { showToast } = useToast();
 
   const handleSubmit = async () => {
     if (!name.trim()) return;
     setIsLoading(true);
     await onSubmit(name.trim(), emoji, color, isPublic);
+    // Celebrate new list creation!
+    fireConfetti("list");
+    showToast(getRandomToast("listCreated"));
     setIsLoading(false);
   };
 
