@@ -88,7 +88,7 @@ export default function TrendingPage() {
         setSpots(sortedSpots);
       }
 
-      // Fetch trending lists (public lists)
+      // Fetch trending lists (all lists with pins)
       const { data: listsData } = await supabase
         .from("lists")
         .select(`
@@ -96,7 +96,6 @@ export default function TrendingPage() {
           profile:profiles(id, username, display_name, avatar_url),
           pins:pins(count)
         `)
-        .eq("is_public", true)
         .order("updated_at", { ascending: false })
         .limit(50);
 
@@ -106,6 +105,7 @@ export default function TrendingPage() {
             ...list,
             pins_count: list.pins?.[0]?.count || 0,
           }))
+          .filter((list: any) => list.pins_count > 0) // Only show lists with pins
           .sort((a: any, b: any) => b.pins_count - a.pins_count);
         setLists(listsWithCount);
       }

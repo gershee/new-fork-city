@@ -96,50 +96,57 @@ export default function SearchPage() {
     const loadSuggestions = async () => {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
+      const currentUserId = user?.id;
 
-      // Fetch top users by follower count
+      // Fetch all users (we'll filter current user in JS if needed)
       const { data: profiles } = await supabase
         .from("profiles")
         .select("*")
-        .neq("id", user?.id || "")
-        .limit(20);
+        .limit(30);
 
       if (profiles) {
         const usersWithStats = await Promise.all(
-          profiles.map(async (profile) => {
-            const [followersResult, listsResult] = await Promise.all([
-              supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", profile.id),
-              supabase.from("lists").select("*", { count: "exact", head: true }).eq("user_id", profile.id).eq("is_public", true),
-            ]);
-            return {
-              ...profile,
-              followers_count: followersResult.count || 0,
-              lists_count: listsResult.count || 0,
-            };
-          })
+          profiles
+            .filter(p => p.id !== currentUserId) // Exclude current user
+            .map(async (profile) => {
+              const [followersResult, listsResult] = await Promise.all([
+                supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", profile.id),
+                supabase.from("lists").select("*", { count: "exact", head: true }).eq("user_id", profile.id),
+              ]);
+              return {
+                ...profile,
+                followers_count: followersResult.count || 0,
+                lists_count: listsResult.count || 0,
+              };
+            })
         );
-        // Sort by follower count and take top 10
-        const sorted = usersWithStats.sort((a, b) => b.followers_count - a.followers_count).slice(0, 10);
+        // Sort by lists count first (users with content), then by followers
+        const sorted = usersWithStats
+          .filter(u => u.lists_count > 0) // Only show users with lists
+          .sort((a, b) => (b.lists_count + b.followers_count) - (a.lists_count + a.followers_count))
+          .slice(0, 10);
         setSuggestedUsers(sorted);
       }
 
-      // Fetch top lists by likes/pins count
+      // Fetch all lists with pins
       const { data: lists } = await supabase
         .from("lists")
         .select(`*, profile:profiles(id, username, display_name, avatar_url), pins:pins(count), likes:list_likes(count)`)
-        .eq("is_public", true)
-        .neq("user_id", user?.id || "")
-        .limit(20);
+        .order("updated_at", { ascending: false })
+        .limit(30);
 
       if (lists) {
-        const listsWithCounts = lists.map((list: any) => ({
-          ...list,
-          pins_count: list.pins?.[0]?.count || 0,
-          likes_count: list.likes?.[0]?.count || 0,
-        }));
-        // Sort by likes + pins and take top 10
+        const listsWithCounts = lists
+          .filter((list: any) => list.user_id !== currentUserId) // Exclude current user's lists
+          .map((list: any) => ({
+            ...list,
+            pins_count: list.pins?.[0]?.count || 0,
+            likes_count: list.likes?.[0]?.count || 0,
+          }));
+        // Sort by pins count (lists with content), then by likes
         const sorted = listsWithCounts
-          .sort((a: any, b: any) => (b.likes_count + b.pins_count) - (a.likes_count + a.pins_count))
+          .filter((list: any) => list.pins_count > 0) // Only show lists with pins
+          .sort((a: any, b: any) => (b.pins_count + b.likes_count) - (a.pins_count + a.likes_count))
           .slice(0, 10);
         setSuggestedLists(sorted);
       }
@@ -182,7 +189,7 @@ export default function SearchPage() {
               data.map(async (profile) => {
                 const [followersResult, listsResult] = await Promise.all([
                   supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", profile.id),
-                  supabase.from("lists").select("*", { count: "exact", head: true }).eq("user_id", profile.id).eq("is_public", true),
+                  supabase.from("lists").select("*", { count: "exact", head: true }).eq("user_id", profile.id),
                 ]);
                 return {
                   ...profile,
@@ -197,7 +204,6 @@ export default function SearchPage() {
           const { data } = await supabase
             .from("lists")
             .select(`*, profile:profiles(id, username, display_name, avatar_url), pins:pins(count)`)
-            .eq("is_public", true)
             .or(`name.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
             .limit(20);
 
