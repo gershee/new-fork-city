@@ -221,11 +221,10 @@ function MapPage() {
       const combinedPins = [...(myPinsData || []), ...followedPins] as Pin[];
       setAllPins(combinedPins);
 
-      // Fetch ALL public pins for heatmap
+      // Fetch ALL pins for heatmap
       const { data: allPublicPins } = await supabase
         .from("pins")
-        .select(`*, list:lists!inner(id, name, emoji_icon, color, is_public)`)
-        .eq("list.is_public", true);
+        .select(`*, list:lists!list_id(id, name, emoji_icon, color, is_public)`);
 
       if (allPublicPins) {
         setHeatmapPins(allPublicPins as Pin[]);
@@ -249,9 +248,8 @@ function MapPage() {
       .from("pins")
       .select(`
         *,
-        list:lists!inner(*, profile:profiles(*))
+        list:lists!list_id(*, profile:profiles!user_id(*))
       `)
-      .eq("list.is_public", true)
       .neq("id", pin.id) // Exclude the current pin
       .gte("lat", pin.lat - tolerance)
       .lte("lat", pin.lat + tolerance)

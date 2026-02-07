@@ -145,12 +145,11 @@ export default function FeedPage() {
         .from("pins")
         .select(`
           *,
-          list:lists!inner(
+          list:lists!list_id(
             *,
-            profile:profiles(id, username, display_name, avatar_url)
+            profile:profiles!user_id(id, username, display_name, avatar_url)
           )
         `)
-        .eq("list.is_public", true)
         .eq("is_visited", true)
         .gte("personal_rating", 4)
         .order("created_at", { ascending: false })
@@ -181,10 +180,9 @@ export default function FeedPage() {
         .from("lists")
         .select(`
           *,
-          profile:profiles(id, username, display_name, avatar_url),
-          pins:pins(count)
+          profile:profiles!user_id(id, username, display_name, avatar_url),
+          pins!list_id(id)
         `)
-        .eq("is_public", true)
         .order("updated_at", { ascending: false })
         .limit(20);
 
@@ -192,9 +190,8 @@ export default function FeedPage() {
         const listsWithCount = listsData
           .map((list: any) => ({
             ...list,
-            pins_count: list.pins?.[0]?.count || 0,
+            pins_count: Array.isArray(list.pins) ? list.pins.length : 0,
           }))
-          .filter((list: any) => list.pins_count > 0)
           .sort((a: any, b: any) => b.pins_count - a.pins_count);
         setLists(listsWithCount);
       }
