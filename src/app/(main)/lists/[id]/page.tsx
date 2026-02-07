@@ -1162,7 +1162,7 @@ function PinLikeButton({ pinId }: { pinId: string }) {
           .select("*")
           .eq("pin_id", pinId)
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
 
         setIsLiked(!!likeData);
       }
