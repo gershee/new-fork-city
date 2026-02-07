@@ -8,7 +8,6 @@ import { MapControls } from "@/components/map/MapControls";
 import { HeatmapLegend } from "@/components/map/HeatmapLegend";
 import { LayersSheet } from "@/components/map/LayersSheet";
 import { PinDetail } from "@/components/pins/PinDetail";
-import { AddPinSheet } from "@/components/pins/AddPinSheet";
 import { EditPinForm } from "@/components/pins/EditPinForm";
 import { BottomSheet, Button, EmptyState, useToast, getRandomToast } from "@/components/ui";
 import { fireConfetti } from "@/components/effects";
@@ -61,10 +60,6 @@ function MapPage() {
   // UI state
   const [selectedPin, setSelectedPin] = useState<Pin | null>(null);
   const [editingPin, setEditingPin] = useState<Pin | null>(null);
-  const [newPinLocation, setNewPinLocation] = useState<{
-    lng: number;
-    lat: number;
-  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mapMode, setMapMode] = useState<"pins" | "heatmap">("pins");
   const [showLayersSheet, setShowLayersSheet] = useState(false);
@@ -242,7 +237,7 @@ function MapPage() {
     setSavedByData([]);
 
     const supabase = createClient();
-    const tolerance = 0.0005; // ~50m
+    const tolerance = 0.001; // ~100m - increased for better matching
 
     const { data: pinsData } = await supabase
       .from("pins")
@@ -257,11 +252,13 @@ function MapPage() {
       .lte("lng", pin.lng + tolerance);
 
     if (pinsData) {
-      const savedBy: SavedByInfo[] = pinsData.map((p: any) => ({
-        pin: p,
-        list: p.list,
-        owner: p.list.profile,
-      }));
+      const savedBy: SavedByInfo[] = pinsData
+        .filter((p: any) => p.list) // Only require list data, profile is optional
+        .map((p: any) => ({
+          pin: p,
+          list: p.list,
+          owner: p.list.profile || { id: p.user_id, username: "unknown", display_name: null, avatar_url: null },
+        }));
       setSavedByData(savedBy);
     }
 
@@ -274,18 +271,8 @@ function MapPage() {
     fetchSavedBy(pin);
   }, [fetchSavedBy]);
 
-  const handleMapClick = useCallback(
-    (lngLat: { lng: number; lat: number }) => {
-      if (lists.length > 0) {
-        setNewPinLocation(lngLat);
-      }
-    },
-    [lists]
-  );
-
   const handleCloseSheet = useCallback(() => {
     setSelectedPin(null);
-    setNewPinLocation(null);
     setEditingPin(null);
     setSavedByData([]);
     setShowSaveSheet(false);
@@ -368,7 +355,6 @@ function MapPage() {
         <MapView
           pins={showHeatmap ? heatmapPins : pins}
           onPinClick={showHeatmap ? undefined : handlePinClick}
-          onMapClick={showHeatmap ? undefined : handleMapClick}
           showHeatmap={showHeatmap}
         />
       </div>
@@ -418,21 +404,21 @@ function MapPage() {
             <EmptyState
               icon="📍"
               title="Start mapping your city"
-              description="Create your first list to start saving places"
+              description="Search for places to start building your lists"
               action={{
-                label: "Create a List",
-                onClick: () => router.push("/lists"),
+                label: "Search Places",
+                onClick: () => router.push("/search"),
               }}
             />
           </div>
         </div>
       )}
 
-      {/* Tap to add hint */}
+      {/* Empty state with lists */}
       {!showHeatmap && pins.length === 0 && lists.length > 0 && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-surface/90 backdrop-blur-xl rounded-full px-4 py-2 z-10">
           <p className="text-text-secondary text-sm">
-            Tap anywhere to add a pin
+            Search for places to add to your lists
           </p>
         </div>
       )}
@@ -492,25 +478,6 @@ function MapPage() {
             lists={lists}
             onSuccess={handlePinUpdated}
             onDelete={handlePinDeleted}
-            onCancel={handleCloseSheet}
-          />
-        )}
-      </BottomSheet>
-
-      {/* Add Pin Sheet */}
-      <BottomSheet
-        isOpen={newPinLocation !== null}
-        onClose={handleCloseSheet}
-        title="Add a new spot"
-      >
-        {newPinLocation && (
-          <AddPinSheet
-            location={newPinLocation}
-            lists={lists}
-            onSuccess={(pin) => {
-              setAllPins((prev) => [...prev, pin]);
-              handleCloseSheet();
-            }}
             onCancel={handleCloseSheet}
           />
         )}

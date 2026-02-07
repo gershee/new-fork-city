@@ -292,7 +292,7 @@ export default function ListDetailPage() {
     setSavedByData([]);
 
     const supabase = createClient();
-    const tolerance = 0.0005; // ~50m
+    const tolerance = 0.001; // ~100m - increased for better matching
 
     const { data: pinsData } = await supabase
       .from("pins")
@@ -308,11 +308,11 @@ export default function ListDetailPage() {
 
     if (pinsData) {
       const savedBy: SavedByInfo[] = pinsData
-        .filter((p: any) => p.list) // Filter out pins without list data
+        .filter((p: any) => p.list) // Only require list data, profile is optional
         .map((p: any) => ({
           pin: p,
           list: p.list,
-          owner: p.list.profile,
+          owner: p.list.profile || { id: p.user_id, username: "unknown", display_name: null, avatar_url: null },
         }));
       setSavedByData(savedBy);
     }
