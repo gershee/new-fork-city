@@ -122,7 +122,7 @@ export default function ListDetailPage() {
             .from("profiles")
             .select("username, display_name, avatar_url")
             .eq("id", listData.user_id)
-            .single();
+            .maybeSingle();
           if (ownerData) {
             setListOwner(ownerData);
           }
