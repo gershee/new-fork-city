@@ -7,13 +7,15 @@ import { Button, BottomSheet, Avatar } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import type { List, Pin, Profile } from "@/types";
 
+type SearchTab = "places" | "users" | "lists";
+
 interface ExistingPin {
   pin: Pin;
   list: List;
   owner: Profile;
 }
 
-interface SearchResult {
+interface PlaceResult {
   id: string;
   place_name: string;
   text: string;
@@ -26,29 +28,47 @@ interface SearchResult {
     id: string;
     text: string;
   }>;
-  mapbox_id?: string; // For Search Box API results
+  mapbox_id?: string;
+}
+
+interface UserResult extends Profile {
+  followers_count: number;
+  lists_count: number;
+}
+
+interface ListResult extends List {
+  pins_count: number;
+  profile: Profile;
 }
 
 export default function SearchPage() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<SearchTab>("places");
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [selectedPlace, setSelectedPlace] = useState<SearchResult | null>(null);
-  const [lists, setLists] = useState<List[]>([]);
-  const [recentSearches, setRecentSearches] = useState<SearchResult[]>([]);
+
+  // Places state
+  const [placeResults, setPlaceResults] = useState<PlaceResult[]>([]);
+  const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
+  const [myLists, setMyLists] = useState<List[]>([]);
+  const [recentSearches, setRecentSearches] = useState<PlaceResult[]>([]);
   const [existingPins, setExistingPins] = useState<ExistingPin[]>([]);
   const [isLoadingExisting, setIsLoadingExisting] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // Users state
+  const [userResults, setUserResults] = useState<UserResult[]>([]);
+
+  // Lists state
+  const [listResults, setListResults] = useState<ListResult[]>([]);
+
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Load lists and recent searches
+  // Load initial data
   useEffect(() => {
     const loadData = async () => {
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
         const { data } = await supabase
@@ -56,21 +76,16 @@ export default function SearchPage() {
           .select("*")
           .eq("user_id", user.id)
           .order("updated_at", { ascending: false });
-
-        if (data) setLists(data);
+        if (data) setMyLists(data);
       }
 
-      // Load recent searches from localStorage
       const saved = localStorage.getItem("new-fork-city-recent-searches");
       if (saved) {
         try {
           setRecentSearches(JSON.parse(saved));
-        } catch {
-          // ignore
-        }
+        } catch {}
       }
     };
-
     loadData();
   }, []);
 
@@ -83,68 +98,99 @@ export default function SearchPage() {
     }
 
     if (!searchQuery.trim()) {
-      setResults([]);
+      setPlaceResults([]);
+      setUserResults([]);
+      setListResults([]);
       return;
     }
 
     searchTimeout.current = setTimeout(async () => {
       setIsSearching(true);
+      const supabase = createClient();
 
       try {
-        // Use Mapbox Search Box API for better POI/business results
-        const sessionToken = crypto.randomUUID();
-        const response = await fetch(
-          `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(
-            searchQuery
-          )}&access_token=${
-            process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-          }&session_token=${sessionToken}&proximity=-73.985428,40.748817&limit=10&types=poi,address&poi_category=restaurant,bar,cafe,food,nightlife,coffee,bakery,fast_food,pub`
-        );
+        // Search based on active tab
+        if (activeTab === "places") {
+          await searchPlaces(searchQuery);
+        } else if (activeTab === "users") {
+          const { data } = await supabase
+            .from("profiles")
+            .select("*")
+            .or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%`)
+            .limit(20);
 
-        const data = await response.json();
+          if (data) {
+            const usersWithStats = await Promise.all(
+              data.map(async (profile) => {
+                const [followersResult, listsResult] = await Promise.all([
+                  supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", profile.id),
+                  supabase.from("lists").select("*", { count: "exact", head: true }).eq("user_id", profile.id).eq("is_public", true),
+                ]);
+                return {
+                  ...profile,
+                  followers_count: followersResult.count || 0,
+                  lists_count: listsResult.count || 0,
+                };
+              })
+            );
+            setUserResults(usersWithStats);
+          }
+        } else if (activeTab === "lists") {
+          const { data } = await supabase
+            .from("lists")
+            .select(`*, profile:profiles(id, username, display_name, avatar_url), pins:pins(count)`)
+            .eq("is_public", true)
+            .or(`name.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
+            .limit(20);
 
-        // Transform suggestions to match our SearchResult interface
-        const suggestions = data.suggestions || [];
-        const transformedResults: SearchResult[] = suggestions.map((s: any) => ({
-          id: s.mapbox_id,
-          place_name: s.full_address || s.address || s.place_formatted || "",
-          text: s.name,
-          center: [0, 0] as [number, number], // Will be fetched on selection
-          properties: {
-            category: s.poi_category?.join(", ") || "",
-            address: s.address,
-          },
-          context: s.context ? [{ id: "neighborhood", text: s.context?.neighborhood?.name || "" }] : [],
-          // Store mapbox_id for retrieval
-          mapbox_id: s.mapbox_id,
-        }));
-
-        setResults(transformedResults);
+          if (data) {
+            const listsWithCount = data.map((list: any) => ({
+              ...list,
+              pins_count: list.pins?.[0]?.count || 0,
+            }));
+            setListResults(listsWithCount);
+          }
+        }
       } catch (error) {
         console.error("Search error:", error);
-        // Fallback to geocoding API
-        try {
-          const fallbackResponse = await fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-              searchQuery
-            )}.json?access_token=${
-              process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-            }&proximity=-73.985428,40.748817&types=poi,address&limit=10`
-          );
-          const fallbackData = await fallbackResponse.json();
-          setResults(fallbackData.features || []);
-        } catch {
-          setResults([]);
-        }
       } finally {
         setIsSearching(false);
       }
     }, 300);
-  }, []);
+  }, [activeTab]);
 
-  const handleSelectPlace = async (place: SearchResult) => {
-    // If this is from Search Box API, we need to fetch coordinates
-    if (place.mapbox_id && (place.center[0] === 0 && place.center[1] === 0)) {
+  const searchPlaces = async (searchQuery: string) => {
+    try {
+      const sessionToken = crypto.randomUUID();
+      const response = await fetch(
+        `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(searchQuery)}&access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}&session_token=${sessionToken}&proximity=-73.985428,40.748817&limit=10&types=poi,address&poi_category=restaurant,bar,cafe,food,nightlife,coffee,bakery,fast_food,pub`
+      );
+      const data = await response.json();
+      const suggestions = data.suggestions || [];
+      const transformedResults: PlaceResult[] = suggestions.map((s: any) => ({
+        id: s.mapbox_id,
+        place_name: s.full_address || s.address || s.place_formatted || "",
+        text: s.name,
+        center: [0, 0] as [number, number],
+        properties: { category: s.poi_category?.join(", ") || "", address: s.address },
+        context: s.context ? [{ id: "neighborhood", text: s.context?.neighborhood?.name || "" }] : [],
+        mapbox_id: s.mapbox_id,
+      }));
+      setPlaceResults(transformedResults);
+    } catch {
+      setPlaceResults([]);
+    }
+  };
+
+  // Re-search when tab changes
+  useEffect(() => {
+    if (query.trim()) {
+      handleSearch(query);
+    }
+  }, [activeTab]);
+
+  const handleSelectPlace = async (place: PlaceResult) => {
+    if (place.mapbox_id && place.center[0] === 0 && place.center[1] === 0) {
       try {
         const response = await fetch(
           `https://api.mapbox.com/search/searchbox/v1/retrieve/${place.mapbox_id}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}&session_token=${crypto.randomUUID()}`
@@ -158,16 +204,10 @@ export default function SearchPage() {
             place_name: feature.properties.full_address || feature.properties.address || place.place_name,
           };
         }
-      } catch (error) {
-        console.error("Error fetching place details:", error);
-      }
+      } catch {}
     }
 
-    // Save to recent searches
-    const updated = [
-      place,
-      ...recentSearches.filter((r) => r.id !== place.id),
-    ].slice(0, 5);
+    const updated = [place, ...recentSearches.filter((r) => r.id !== place.id)].slice(0, 5);
     setRecentSearches(updated);
     localStorage.setItem("new-fork-city-recent-searches", JSON.stringify(updated));
 
@@ -175,27 +215,21 @@ export default function SearchPage() {
     setShowAddForm(false);
     setExistingPins([]);
 
-    // Fetch existing pins at this location
     if (place.center[0] !== 0 && place.center[1] !== 0) {
       fetchExistingPins(place);
     }
   };
 
-  const fetchExistingPins = async (place: SearchResult) => {
+  const fetchExistingPins = async (place: PlaceResult) => {
     setIsLoadingExisting(true);
     const supabase = createClient();
-
-    // Search for pins near this location (within ~50m) or matching name
     const lat = place.center[1];
     const lng = place.center[0];
-    const tolerance = 0.0005; // roughly 50m
+    const tolerance = 0.0005;
 
     const { data: pinsData } = await supabase
       .from("pins")
-      .select(`
-        *,
-        list:lists!inner(*, profile:profiles(*))
-      `)
+      .select(`*, list:lists!inner(*, profile:profiles(*))`)
       .eq("list.is_public", true)
       .gte("lat", lat - tolerance)
       .lte("lat", lat + tolerance)
@@ -203,30 +237,15 @@ export default function SearchPage() {
       .lte("lng", lng + tolerance);
 
     if (pinsData) {
-      const existing: ExistingPin[] = pinsData.map((pin: any) => ({
-        pin,
-        list: pin.list,
-        owner: pin.list.profile,
-      }));
-      setExistingPins(existing);
+      setExistingPins(pinsData.map((pin: any) => ({ pin, list: pin.list, owner: pin.list.profile })));
     }
-
     setIsLoadingExisting(false);
   };
 
-  const handleSavePin = async (
-    listId: string,
-    isVisited: boolean,
-    rating: number | null,
-    notes: string
-  ) => {
+  const handleSavePin = async (listId: string, isVisited: boolean, rating: number | null, notes: string) => {
     if (!selectedPlace) return;
-
     const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
     const { error } = await supabase.from("pins").insert({
@@ -245,152 +264,277 @@ export default function SearchPage() {
     if (!error) {
       setSelectedPlace(null);
       setQuery("");
-      setResults([]);
-      // Navigate to map centered on the new pin
-      router.push("/");
+      setPlaceResults([]);
+      router.push("/explore");
     }
   };
 
-  const getPlaceCategory = (place: SearchResult) => {
-    if (place.properties?.category) {
-      return place.properties.category.split(",")[0];
-    }
-    return null;
-  };
-
-  const getPlaceNeighborhood = (place: SearchResult) => {
-    const neighborhood = place.context?.find((c) =>
-      c.id.startsWith("neighborhood")
-    );
-    return neighborhood?.text;
-  };
+  const tabs: { id: SearchTab; label: string; icon: string }[] = [
+    { id: "places", label: "Places", icon: "📍" },
+    { id: "users", label: "Users", icon: "👤" },
+    { id: "lists", label: "Lists", icon: "📋" },
+  ];
 
   return (
     <div className="min-h-screen bg-background pb-20">
       {/* Search Header */}
-      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border p-4">
-        <div className="relative">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Search for places..."
-            autoFocus
-            className="w-full bg-surface-elevated border border-border rounded-xl pl-10 pr-10 py-3 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon-pink"
-          />
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" />
-          {query && (
+      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border">
+        <div className="p-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder={`Search ${activeTab}...`}
+              autoFocus
+              className="w-full bg-surface-elevated border border-border rounded-xl pl-10 pr-10 py-3 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon-pink"
+            />
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" />
+            {query && (
+              <button
+                onClick={() => {
+                  setQuery("");
+                  setPlaceResults([]);
+                  setUserResults([]);
+                  setListResults([]);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+              >
+                <CloseIcon className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 px-4 pb-3">
+          {tabs.map((tab) => (
             <button
-              onClick={() => {
-                setQuery("");
-                setResults([]);
-              }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === tab.id
+                  ? "bg-gradient-to-r from-neon-pink to-neon-purple text-white shadow-lg shadow-neon-pink/25"
+                  : "bg-surface-elevated text-text-muted hover:text-text-primary"
+              }`}
             >
-              <CloseIcon className="w-5 h-5" />
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
             </button>
-          )}
+          ))}
         </div>
       </div>
 
       {/* Results */}
       <div className="p-4">
-        {/* Loading */}
         {isSearching && (
           <div className="flex items-center justify-center py-8">
             <div className="w-6 h-6 border-2 border-neon-pink border-t-transparent rounded-full animate-spin" />
           </div>
         )}
 
-        {/* Search Results */}
-        {!isSearching && results.length > 0 && (
-          <div className="space-y-2">
-            <AnimatePresence>
-              {results.map((result, index) => (
-                <motion.button
-                  key={result.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  onClick={() => handleSelectPlace(result)}
-                  className="w-full text-left bg-surface-elevated rounded-xl p-4 hover:bg-surface-hover transition-colors"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-neon-pink/20 flex items-center justify-center shrink-0">
-                      <span className="text-lg">📍</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-text-primary truncate">
-                        {result.text}
-                      </h3>
-                      <p className="text-sm text-text-secondary truncate">
-                        {result.place_name}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {getPlaceCategory(result) && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-surface text-text-muted">
-                            {getPlaceCategory(result)}
-                          </span>
-                        )}
-                        {getPlaceNeighborhood(result) && (
-                          <span className="text-xs text-text-muted">
-                            {getPlaceNeighborhood(result)}
-                          </span>
-                        )}
+        {/* Places Tab */}
+        {activeTab === "places" && !isSearching && (
+          <>
+            {placeResults.length > 0 && (
+              <div className="space-y-2">
+                <AnimatePresence>
+                  {placeResults.map((result, index) => (
+                    <motion.button
+                      key={result.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      onClick={() => handleSelectPlace(result)}
+                      className="w-full text-left bg-surface-elevated rounded-xl p-4 hover:bg-surface-hover transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-full bg-neon-pink/20 flex items-center justify-center shrink-0">
+                          <span className="text-lg">📍</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-text-primary truncate">{result.text}</h3>
+                          <p className="text-sm text-text-secondary truncate">{result.place_name}</p>
+                          {result.properties?.category && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-surface text-text-muted mt-1 inline-block">
+                              {result.properties.category.split(",")[0]}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </motion.button>
-              ))}
-            </AnimatePresence>
-          </div>
+                    </motion.button>
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {!query && recentSearches.length > 0 && (
+              <div>
+                <h2 className="text-sm font-medium text-text-secondary mb-3">Recent Searches</h2>
+                <div className="space-y-2">
+                  {recentSearches.map((place) => (
+                    <button
+                      key={place.id}
+                      onClick={() => handleSelectPlace(place)}
+                      className="w-full text-left bg-surface-elevated rounded-xl p-4 hover:bg-surface-hover transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <HistoryIcon className="w-5 h-5 text-text-muted" />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-text-primary truncate">{place.text}</h3>
+                          <p className="text-sm text-text-secondary truncate">{place.place_name}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {query && placeResults.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-text-muted">No places found</p>
+              </div>
+            )}
+
+            {!query && recentSearches.length === 0 && (
+              <div className="text-center py-12">
+                <SearchIcon className="w-12 h-12 text-text-muted mx-auto mb-4" />
+                <p className="text-text-secondary">Search for restaurants, bars, cafes, and more</p>
+              </div>
+            )}
+          </>
         )}
 
-        {/* No Results */}
-        {!isSearching && query && results.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-text-muted">No places found</p>
-          </div>
+        {/* Users Tab */}
+        {activeTab === "users" && !isSearching && (
+          <>
+            {userResults.length > 0 && (
+              <div className="space-y-2">
+                <AnimatePresence>
+                  {userResults.map((user, index) => (
+                    <motion.button
+                      key={user.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      onClick={() => router.push(`/user/${user.username}`)}
+                      className="w-full text-left bg-surface-elevated rounded-xl p-4 hover:bg-surface-hover transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar
+                          src={user.avatar_url}
+                          alt={user.display_name || user.username}
+                          fallback={(user.display_name || user.username)?.[0]}
+                          size="md"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-text-primary truncate">
+                            {user.display_name || user.username}
+                          </h3>
+                          <p className="text-sm text-text-muted">@{user.username}</p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-xs text-text-secondary">
+                              <span className="font-medium text-text-primary">{user.followers_count}</span> followers
+                            </span>
+                            <span className="text-xs text-text-secondary">
+                              <span className="font-medium text-text-primary">{user.lists_count}</span> lists
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronRightIcon />
+                      </div>
+                    </motion.button>
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {query && userResults.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-text-muted">No users found</p>
+              </div>
+            )}
+
+            {!query && (
+              <div className="text-center py-12">
+                <span className="text-4xl mb-4 block">👤</span>
+                <p className="text-text-secondary">Search for users by name or username</p>
+              </div>
+            )}
+          </>
         )}
 
-        {/* Recent Searches */}
-        {!query && recentSearches.length > 0 && (
-          <div>
-            <h2 className="text-sm font-medium text-text-secondary mb-3">
-              Recent Searches
-            </h2>
-            <div className="space-y-2">
-              {recentSearches.map((place) => (
-                <button
-                  key={place.id}
-                  onClick={() => handleSelectPlace(place)}
-                  className="w-full text-left bg-surface-elevated rounded-xl p-4 hover:bg-surface-hover transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <HistoryIcon className="w-5 h-5 text-text-muted" />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-text-primary truncate">
-                        {place.text}
-                      </h3>
-                      <p className="text-sm text-text-secondary truncate">
-                        {place.place_name}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Lists Tab */}
+        {activeTab === "lists" && !isSearching && (
+          <>
+            {listResults.length > 0 && (
+              <div className="space-y-2">
+                <AnimatePresence>
+                  {listResults.map((list, index) => (
+                    <motion.button
+                      key={list.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      onClick={() => router.push(`/lists/${list.id}`)}
+                      className="w-full text-left bg-surface-elevated rounded-xl p-4 hover:bg-surface-hover transition-colors relative overflow-hidden"
+                    >
+                      <div
+                        className="absolute top-0 left-0 right-0 h-1"
+                        style={{ backgroundColor: list.color }}
+                      />
+                      <div className="flex items-start gap-3">
+                        <div
+                          className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0"
+                          style={{ backgroundColor: `${list.color}20` }}
+                        >
+                          {list.emoji_icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-text-primary truncate">{list.name}</h3>
+                          {list.description && (
+                            <p className="text-sm text-text-secondary truncate">{list.description}</p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs bg-surface px-2 py-0.5 rounded-full text-text-muted">
+                              {list.pins_count} {list.pins_count === 1 ? "spot" : "spots"}
+                            </span>
+                          </div>
+                          {/* Creator */}
+                          <div className="flex items-center gap-2 mt-2">
+                            <Avatar
+                              src={list.profile?.avatar_url}
+                              alt={list.profile?.display_name || list.profile?.username}
+                              fallback={(list.profile?.display_name || list.profile?.username)?.[0]}
+                              size="xs"
+                            />
+                            <span className="text-xs text-text-muted">
+                              @{list.profile?.username}
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronRightIcon />
+                      </div>
+                    </motion.button>
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
 
-        {/* Empty State */}
-        {!query && recentSearches.length === 0 && (
-          <div className="text-center py-12">
-            <SearchIcon className="w-12 h-12 text-text-muted mx-auto mb-4" />
-            <p className="text-text-secondary">
-              Search for restaurants, bars, cafes, and more
-            </p>
-          </div>
+            {query && listResults.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-text-muted">No lists found</p>
+              </div>
+            )}
+
+            {!query && (
+              <div className="text-center py-12">
+                <span className="text-4xl mb-4 block">📋</span>
+                <p className="text-text-secondary">Search for public lists</p>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -418,12 +562,10 @@ export default function SearchPage() {
         {selectedPlace && showAddForm && (
           <SavePinForm
             place={selectedPlace}
-            lists={lists}
+            lists={myLists}
             onSave={handleSavePin}
             onCancel={() => setShowAddForm(false)}
-            onListCreated={(newList) => {
-              setLists((prev) => [newList, ...prev]);
-            }}
+            onListCreated={(newList) => setMyLists((prev) => [newList, ...prev])}
           />
         )}
       </BottomSheet>
@@ -433,7 +575,6 @@ export default function SearchPage() {
 
 type SortOption = "saves" | "rating" | "recent";
 
-// Place Details Component
 function PlaceDetails({
   place,
   existingPins,
@@ -441,7 +582,7 @@ function PlaceDetails({
   onAddToList,
   onViewList,
 }: {
-  place: SearchResult;
+  place: PlaceResult;
   existingPins: ExistingPin[];
   isLoading: boolean;
   onAddToList: () => void;
@@ -449,14 +590,12 @@ function PlaceDetails({
 }) {
   const [sortBy, setSortBy] = useState<SortOption>("saves");
 
-  // Calculate stats
   const saveCount = existingPins.length;
   const avgRating = existingPins.length > 0
     ? existingPins.reduce((sum, { pin }) => sum + (pin.personal_rating || 0), 0) / existingPins.filter(p => p.pin.personal_rating).length || 0
     : 0;
   const visitedCount = existingPins.filter(({ pin }) => pin.is_visited).length;
 
-  // Sort pins based on selected option
   const sortedPins = useMemo(() => {
     const pins = [...existingPins];
     switch (sortBy) {
@@ -464,13 +603,11 @@ function PlaceDetails({
         return pins.sort((a, b) => (b.pin.personal_rating || 0) - (a.pin.personal_rating || 0));
       case "recent":
         return pins.sort((a, b) => new Date(b.pin.created_at).getTime() - new Date(a.pin.created_at).getTime());
-      case "saves":
       default:
         return pins;
     }
   }, [existingPins, sortBy]);
 
-  // Get unique lists
   const uniqueLists = useMemo(() => {
     const listMap = new Map<string, { list: List; count: number }>();
     existingPins.forEach(({ list }) => {
@@ -485,7 +622,6 @@ function PlaceDetails({
 
   return (
     <div className="space-y-4">
-      {/* Address & Category */}
       <div>
         <p className="text-text-secondary">{place.place_name}</p>
         {place.properties?.category && (
@@ -495,7 +631,6 @@ function PlaceDetails({
         )}
       </div>
 
-      {/* Social Proof Stats */}
       {!isLoading && saveCount > 0 && (
         <div className="bg-surface rounded-xl p-3">
           <div className="flex items-center justify-between">
@@ -515,14 +650,11 @@ function PlaceDetails({
                 <p className="text-xs text-text-muted">visited</p>
               </div>
             </div>
-            {saveCount >= 5 && (
-              <span className="text-2xl">🔥</span>
-            )}
+            {saveCount >= 5 && <span className="text-2xl">🔥</span>}
           </div>
         </div>
       )}
 
-      {/* Lists containing this place */}
       {!isLoading && uniqueLists.length > 0 && (
         <div>
           <h3 className="text-sm font-medium text-text-secondary mb-2">
@@ -541,20 +673,15 @@ function PlaceDetails({
               </button>
             ))}
             {uniqueLists.length > 5 && (
-              <span className="px-2 py-1.5 text-xs text-text-muted">
-                +{uniqueLists.length - 5} more
-              </span>
+              <span className="px-2 py-1.5 text-xs text-text-muted">+{uniqueLists.length - 5} more</span>
             )}
           </div>
         </div>
       )}
 
-      {/* Who has saved this */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium text-text-secondary">
-            Saved by
-          </h3>
+          <h3 className="text-sm font-medium text-text-secondary">Saved by</h3>
           {existingPins.length > 1 && (
             <div className="flex gap-1">
               {(["saves", "rating", "recent"] as SortOption[]).map((option) => (
@@ -562,9 +689,7 @@ function PlaceDetails({
                   key={option}
                   onClick={() => setSortBy(option)}
                   className={`px-2 py-1 rounded-md text-xs transition-colors ${
-                    sortBy === option
-                      ? "bg-neon-pink text-white"
-                      : "bg-surface text-text-muted hover:text-text-primary"
+                    sortBy === option ? "bg-neon-pink text-white" : "bg-surface text-text-muted hover:text-text-primary"
                   }`}
                 >
                   {option === "saves" ? "Popular" : option === "rating" ? "Rating" : "Recent"}
@@ -580,9 +705,7 @@ function PlaceDetails({
         ) : existingPins.length === 0 ? (
           <div className="text-center py-4 bg-surface rounded-xl">
             <p className="text-2xl mb-2">✨</p>
-            <p className="text-sm text-text-muted">
-              Be the first to save this place!
-            </p>
+            <p className="text-sm text-text-muted">Be the first to save this place!</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -599,24 +722,12 @@ function PlaceDetails({
                   size="sm"
                 />
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-text-primary truncate">
-                    {owner.display_name || owner.username}
-                  </p>
-                  <p className="text-sm text-text-muted truncate">
-                    {list.emoji_icon} {list.name}
-                  </p>
+                  <p className="font-medium text-text-primary truncate">{owner.display_name || owner.username}</p>
+                  <p className="text-sm text-text-muted truncate">{list.emoji_icon} {list.name}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {pin.personal_rating && (
-                    <span className="text-sm text-neon-orange">
-                      {"★".repeat(pin.personal_rating)}
-                    </span>
-                  )}
-                  {pin.is_visited && (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-neon-green/20 text-neon-green">
-                      ✓
-                    </span>
-                  )}
+                  {pin.personal_rating && <span className="text-sm text-neon-orange">{"★".repeat(pin.personal_rating)}</span>}
+                  {pin.is_visited && <span className="text-xs px-1.5 py-0.5 rounded bg-neon-green/20 text-neon-green">✓</span>}
                 </div>
                 <ChevronRightIcon />
               </button>
@@ -625,17 +736,11 @@ function PlaceDetails({
         )}
       </div>
 
-      {/* Actions */}
       <div className="flex gap-3">
         <Button
           variant="secondary"
           className="flex-1"
-          onClick={() => {
-            window.open(
-              `https://www.google.com/maps/dir/?api=1&destination=${place.center[1]},${place.center[0]}`,
-              "_blank"
-            );
-          }}
+          onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${place.center[1]},${place.center[0]}`, "_blank")}
         >
           <DirectionsIcon />
           Directions
@@ -649,25 +754,9 @@ function PlaceDetails({
   );
 }
 
-function DirectionsIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5">
-      <path d="M3 11l19-9-9 19-2-8-8-2z" />
-    </svg>
-  );
-}
+const EMOJI_OPTIONS = ["📍", "🍕", "🍔", "🍜", "🍣", "🍷", "🍺", "☕", "🍰", "🌮"];
+const COLOR_OPTIONS = ["#ff2d92", "#00f0ff", "#b14eff", "#39ff14", "#ff6b35", "#ffd700", "#ff6b6b", "#4ecdc4"];
 
-const EMOJI_OPTIONS = [
-  "📍", "🍕", "🍔", "🍜", "🍣", "🍷", "🍺", "☕", "🍰", "🌮",
-  "🥗", "🍝", "🥐", "🍦", "🎉", "❤️", "⭐", "🔥", "💎", "🌙",
-];
-
-const COLOR_OPTIONS = [
-  "#ff2d92", "#00f0ff", "#b14eff", "#39ff14",
-  "#ff6b35", "#ffd700", "#ff6b6b", "#4ecdc4",
-];
-
-// Save Pin Form
 function SavePinForm({
   place,
   lists,
@@ -675,14 +764,9 @@ function SavePinForm({
   onCancel,
   onListCreated,
 }: {
-  place: SearchResult;
+  place: PlaceResult;
   lists: List[];
-  onSave: (
-    listId: string,
-    isVisited: boolean,
-    rating: number | null,
-    notes: string
-  ) => void;
+  onSave: (listId: string, isVisited: boolean, rating: number | null, notes: string) => void;
   onCancel: () => void;
   onListCreated?: (list: List) => void;
 }) {
@@ -691,203 +775,119 @@ function SavePinForm({
   const [rating, setRating] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  // New list form state
   const [newListName, setNewListName] = useState("");
   const [newListEmoji, setNewListEmoji] = useState("📍");
   const [newListColor, setNewListColor] = useState("#ff2d92");
 
   const handleSubmit = async () => {
     setIsLoading(true);
-
-    // If creating a new list
     if (selectedListId === "new") {
-      if (!newListName.trim()) {
-        setIsLoading(false);
-        return;
-      }
-
+      if (!newListName.trim()) { setIsLoading(false); return; }
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        setIsLoading(false);
-        return;
-      }
+      if (!user) { setIsLoading(false); return; }
 
       const { data: newList, error } = await supabase
         .from("lists")
-        .insert({
-          user_id: user.id,
-          name: newListName.trim(),
-          emoji_icon: newListEmoji,
-          color: newListColor,
-          is_public: false,
-        })
-        .select()
-        .single();
+        .insert({ user_id: user.id, name: newListName.trim(), emoji_icon: newListEmoji, color: newListColor, is_public: false })
+        .select().single();
 
-      if (error || !newList) {
-        console.error("Error creating list:", error);
-        setIsLoading(false);
-        return;
-      }
-
-      // Notify parent about new list
+      if (error || !newList) { setIsLoading(false); return; }
       onListCreated?.(newList);
-
-      // Save pin to the new list
       await onSave(newList.id, isVisited, rating, notes);
     } else {
       await onSave(selectedListId, isVisited, rating, notes);
     }
-
     setIsLoading(false);
   };
 
   return (
     <div className="space-y-4">
-        {/* Address */}
-        <p className="text-text-secondary text-sm">{place.place_name}</p>
+      <p className="text-text-secondary text-sm">{place.place_name}</p>
 
-        {/* List Selection */}
-        <div>
-          <label className="block text-sm text-text-secondary mb-1.5">
-            Add to list
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {lists.map((list) => (
-              <button
-                key={list.id}
-                onClick={() => setSelectedListId(list.id)}
-                className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors ${
-                  selectedListId === list.id
-                    ? "bg-neon-pink text-white"
-                    : "bg-surface-elevated text-text-primary border border-border"
-                }`}
-              >
-                <span>{list.emoji_icon}</span>
-                <span>{list.name}</span>
-              </button>
-            ))}
+      <div>
+        <label className="block text-sm text-text-secondary mb-1.5">Add to list</label>
+        <div className="flex flex-wrap gap-2">
+          {lists.map((list) => (
             <button
-              onClick={() => setSelectedListId("new")}
+              key={list.id}
+              onClick={() => setSelectedListId(list.id)}
               className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors ${
-                selectedListId === "new"
-                  ? "bg-neon-cyan text-white"
-                  : "bg-surface-elevated text-text-primary border border-border border-dashed"
+                selectedListId === list.id ? "bg-neon-pink text-white" : "bg-surface-elevated text-text-primary border border-border"
               }`}
             >
-              <span>+</span>
-              <span>New list</span>
+              <span>{list.emoji_icon}</span><span>{list.name}</span>
             </button>
-          </div>
-        </div>
-
-        {/* New List Form */}
-        {selectedListId === "new" && (
-          <div className="space-y-3 p-3 bg-surface rounded-xl">
-            <input
-              type="text"
-              value={newListName}
-              onChange={(e) => setNewListName(e.target.value)}
-              placeholder="List name..."
-              className="w-full bg-surface-elevated border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon-cyan"
-            />
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted">Icon:</span>
-              <div className="flex flex-wrap gap-1">
-                {EMOJI_OPTIONS.slice(0, 10).map((e) => (
-                  <button
-                    key={e}
-                    onClick={() => setNewListEmoji(e)}
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${
-                      newListEmoji === e
-                        ? "bg-neon-cyan/20 ring-1 ring-neon-cyan"
-                        : "bg-surface-elevated"
-                    }`}
-                  >
-                    {e}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted">Color:</span>
-              <div className="flex gap-1">
-                {COLOR_OPTIONS.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setNewListColor(c)}
-                    className={`w-6 h-6 rounded-full ${
-                      newListColor === c ? "ring-2 ring-white ring-offset-1 ring-offset-surface" : ""
-                    }`}
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
-              </div>
-          </div>
-        </div>
-      )}
-
-      {/* Status */}
-      <div>
-        <label className="block text-sm text-text-secondary mb-1.5">
-          Status
-        </label>
-        <div className="flex gap-2">
+          ))}
           <button
-            onClick={() => setIsVisited(false)}
-            className={`flex-1 px-4 py-2 rounded-xl text-sm transition-colors ${
-              !isVisited
-                ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan"
-                : "bg-surface-elevated text-text-secondary border border-border"
+            onClick={() => setSelectedListId("new")}
+            className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors ${
+              selectedListId === "new" ? "bg-neon-cyan text-white" : "bg-surface-elevated text-text-primary border border-border border-dashed"
             }`}
           >
-            Want to try
-          </button>
-          <button
-            onClick={() => setIsVisited(true)}
-            className={`flex-1 px-4 py-2 rounded-xl text-sm transition-colors ${
-              isVisited
-                ? "bg-neon-green/20 text-neon-green border border-neon-green"
-                : "bg-surface-elevated text-text-secondary border border-border"
-            }`}
-          >
-            Been here
+            <span>+</span><span>New list</span>
           </button>
         </div>
       </div>
 
-      {/* Rating */}
+      {selectedListId === "new" && (
+        <div className="space-y-3 p-3 bg-surface rounded-xl">
+          <input
+            type="text"
+            value={newListName}
+            onChange={(e) => setNewListName(e.target.value)}
+            placeholder="List name..."
+            className="w-full bg-surface-elevated border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-neon-cyan"
+          />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-text-muted">Icon:</span>
+            <div className="flex flex-wrap gap-1">
+              {EMOJI_OPTIONS.map((e) => (
+                <button
+                  key={e}
+                  onClick={() => setNewListEmoji(e)}
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${newListEmoji === e ? "bg-neon-cyan/20 ring-1 ring-neon-cyan" : "bg-surface-elevated"}`}
+                >{e}</button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-text-muted">Color:</span>
+            <div className="flex gap-1">
+              {COLOR_OPTIONS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setNewListColor(c)}
+                  className={`w-6 h-6 rounded-full ${newListColor === c ? "ring-2 ring-white ring-offset-1 ring-offset-surface" : ""}`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <label className="block text-sm text-text-secondary mb-1.5">Status</label>
+        <div className="flex gap-2">
+          <button onClick={() => setIsVisited(false)} className={`flex-1 px-4 py-2 rounded-xl text-sm transition-colors ${!isVisited ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan" : "bg-surface-elevated text-text-secondary border border-border"}`}>Want to try</button>
+          <button onClick={() => setIsVisited(true)} className={`flex-1 px-4 py-2 rounded-xl text-sm transition-colors ${isVisited ? "bg-neon-green/20 text-neon-green border border-neon-green" : "bg-surface-elevated text-text-secondary border border-border"}`}>Been here</button>
+        </div>
+      </div>
+
       {isVisited && (
         <div>
-          <label className="block text-sm text-text-secondary mb-1.5">
-            Rating
-          </label>
+          <label className="block text-sm text-text-secondary mb-1.5">Rating</label>
           <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                onClick={() => setRating(rating === star ? null : star)}
-                className={`text-2xl transition-colors ${
-                  rating && star <= rating
-                    ? "text-neon-orange"
-                    : "text-text-muted"
-                }`}
-              >
-                ★
-              </button>
+              <button key={star} onClick={() => setRating(rating === star ? null : star)} className={`text-2xl transition-colors ${rating && star <= rating ? "text-neon-orange" : "text-text-muted"}`}>★</button>
             ))}
           </div>
         </div>
       )}
 
-      {/* Notes */}
       <div>
-        <label className="block text-sm text-text-secondary mb-1.5">
-          Notes
-        </label>
+        <label className="block text-sm text-text-secondary mb-1.5">Notes</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -897,18 +897,9 @@ function SavePinForm({
         />
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-3 pt-2 sticky bottom-0 bg-surface pb-2">
-        <Button variant="ghost" onClick={onCancel}>
-          <BackIcon />
-        </Button>
-        <Button
-          variant="primary"
-          className="flex-1"
-          onClick={handleSubmit}
-          isLoading={isLoading}
-          disabled={selectedListId === "new" ? !newListName.trim() : !selectedListId}
-        >
+      <div className="flex gap-3 pt-2">
+        <Button variant="ghost" onClick={onCancel}><BackIcon /></Button>
+        <Button variant="primary" className="flex-1" onClick={handleSubmit} isLoading={isLoading} disabled={selectedListId === "new" ? !newListName.trim() : !selectedListId}>
           {selectedListId === "new" ? "Create & Save" : "Save to List"}
         </Button>
       </div>
@@ -916,87 +907,10 @@ function SavePinForm({
   );
 }
 
-function BackIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M19 12H5M12 19l-7-7 7-7" />
-    </svg>
-  );
-}
-
-// Icons
-function SearchIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.35-4.35" />
-    </svg>
-  );
-}
-
-function CloseIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M18 6L6 18M6 6l12 12" />
-    </svg>
-  );
-}
-
-function HistoryIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      className="text-text-muted shrink-0"
-    >
-      <path d="m9 18 6-6-6-6" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      className="mr-1.5"
-    >
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  );
-}
+function BackIcon() { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>; }
+function SearchIcon({ className }: { className?: string }) { return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>; }
+function CloseIcon({ className }: { className?: string }) { return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>; }
+function HistoryIcon({ className }: { className?: string }) { return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>; }
+function ChevronRightIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted shrink-0"><path d="m9 18 6-6-6-6" /></svg>; }
+function DirectionsIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5"><path d="M3 11l19-9-9 19-2-8-8-2z" /></svg>; }
+function PlusIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mr-1.5"><path d="M12 5v14M5 12h14" /></svg>; }
