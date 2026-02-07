@@ -65,9 +65,9 @@ export default function TrendingPage() {
         .from("pins")
         .select(`
           *,
-          list:lists(
+          list:lists!list_id(
             *,
-            profile:profiles(id, username, display_name, avatar_url)
+            profile:profiles!user_id(id, username, display_name, avatar_url)
           )
         `)
         .order("created_at", { ascending: false })
@@ -110,8 +110,8 @@ export default function TrendingPage() {
         .from("lists")
         .select(`
           *,
-          profile:profiles(id, username, display_name, avatar_url),
-          pins(id)
+          profile:profiles!user_id(id, username, display_name, avatar_url),
+          pins!list_id(id)
         `)
         .order("updated_at", { ascending: false })
         .limit(50);

@@ -131,7 +131,7 @@ export default function SearchPage() {
       // Fetch all lists with pins
       const { data: lists } = await supabase
         .from("lists")
-        .select(`*, profile:profiles(id, username, display_name, avatar_url), pins(id), likes:list_likes(id)`)
+        .select(`*, profile:profiles!user_id(id, username, display_name, avatar_url), pins!list_id(id), likes:list_likes!list_id(id)`)
         .order("updated_at", { ascending: false })
         .limit(30);
 
@@ -202,7 +202,7 @@ export default function SearchPage() {
         } else if (activeTab === "lists") {
           const { data } = await supabase
             .from("lists")
-            .select(`*, profile:profiles(id, username, display_name, avatar_url), pins(id)`)
+            .select(`*, profile:profiles!user_id(id, username, display_name, avatar_url), pins!list_id(id)`)
             .or(`name.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
             .limit(20);
 
@@ -292,8 +292,7 @@ export default function SearchPage() {
 
     const { data: pinsData } = await supabase
       .from("pins")
-      .select(`*, list:lists!inner(*, profile:profiles(*))`)
-      .eq("list.is_public", true)
+      .select(`*, list:lists!list_id(*, profile:profiles!user_id(*))`)
       .gte("lat", lat - tolerance)
       .lte("lat", lat + tolerance)
       .gte("lng", lng - tolerance)
