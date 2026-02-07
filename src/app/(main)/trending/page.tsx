@@ -3,8 +3,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Button, HotBanner } from "@/components/ui";
+import { Button, HotBanner, BottomSheet } from "@/components/ui";
 import { FireParticles, RisingParticles } from "@/components/effects";
+import { PinDetail } from "@/components/pins/PinDetail";
 import { createClient } from "@/lib/supabase/client";
 import type { Pin, List, Profile } from "@/types";
 
@@ -12,6 +13,12 @@ interface TrendingSpot extends Pin {
   save_count: number;
   saves_today?: number;
   list: List & { profile: Profile };
+}
+
+interface SavedByInfo {
+  pin: Pin;
+  list: List;
+  owner: Profile;
 }
 
 interface TrendingList extends List {
@@ -47,10 +54,59 @@ export default function TrendingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("week");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [selectedPin, setSelectedPin] = useState<TrendingSpot | null>(null);
+  const [savedByData, setSavedByData] = useState<SavedByInfo[]>([]);
+  const [isLoadingSavedBy, setIsLoadingSavedBy] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Fetch "saved by" data for a location
+  const fetchSavedBy = async (pin: Pin) => {
+    setIsLoadingSavedBy(true);
+    setSavedByData([]);
+
+    const supabase = createClient();
+    const tolerance = 0.001; // ~100m - increased for better matching
+
+    const { data: pinsData } = await supabase
+      .from("pins")
+      .select(`
+        *,
+        list:lists!list_id(*, profile:profiles!user_id(*))
+      `)
+      .neq("id", pin.id)
+      .gte("lat", pin.lat - tolerance)
+      .lte("lat", pin.lat + tolerance)
+      .gte("lng", pin.lng - tolerance)
+      .lte("lng", pin.lng + tolerance);
+
+    if (pinsData) {
+      const savedBy: SavedByInfo[] = pinsData
+        .filter((p: any) => p.list) // Only require list data, profile is optional
+        .map((p: any) => ({
+          pin: p,
+          list: p.list,
+          owner: p.list.profile || { id: p.user_id, username: "unknown", display_name: null, avatar_url: null },
+        }));
+      setSavedByData(savedBy);
+    }
+
+    setIsLoadingSavedBy(false);
+  };
+
+  const handleSpotClick = (spot: TrendingSpot) => {
+    setSelectedPin(spot);
+    fetchSavedBy(spot);
+  };
 
   useEffect(() => {
     const fetchTrending = async () => {
       const supabase = createClient();
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+      }
 
       // Fetch trending spots (all pins)
       const { data: pinsData } = await supabase
@@ -284,7 +340,7 @@ export default function TrendingPage() {
               spots={hotSpots}
               onSpotClick={(spotId) => {
                 const spot = spots.find((s) => s.id === spotId);
-                if (spot) router.push(`/lists/${spot.list_id}`);
+                if (spot) handleSpotClick(spot);
               }}
             />
           )}
@@ -332,7 +388,7 @@ export default function TrendingPage() {
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.1 }}
-                    onClick={() => router.push(`/lists/${spot.list_id}`)}
+                    onClick={() => handleSpotClick(spot)}
                     className="w-full flex items-center gap-3 p-2 bg-surface-elevated rounded-xl hover:bg-surface-hover transition-colors"
                   >
                     <div
@@ -377,7 +433,7 @@ export default function TrendingPage() {
                       key={spot.id}
                       spot={spot}
                       rank={index + 1}
-                      onClick={() => router.push(`/lists/${spot.list_id}`)}
+                      onClick={() => handleSpotClick(spot)}
                     />
                   ))
                 )}
@@ -441,6 +497,29 @@ export default function TrendingPage() {
           </AnimatePresence>
         </div>
       )}
+
+      {/* Pin Detail Sheet */}
+      <BottomSheet
+        isOpen={selectedPin !== null}
+        onClose={() => {
+          setSelectedPin(null);
+          setSavedByData([]);
+        }}
+        title={selectedPin?.name}
+      >
+        {selectedPin && (
+          <PinDetail
+            pin={selectedPin}
+            isOwn={selectedPin.user_id === currentUserId}
+            onEdit={() => {
+              // Navigate to the list page where they can edit
+              router.push(`/lists/${selectedPin.list_id}`);
+            }}
+            savedBy={savedByData}
+            isLoadingSavedBy={isLoadingSavedBy}
+          />
+        )}
+      </BottomSheet>
 
       {/* Heatmap CTA */}
       <div className="fixed bottom-20 left-4 right-4 z-10">
@@ -514,7 +593,7 @@ function SpotCard({
         {/* Glow effect for top 3 */}
         {rank <= 3 && (
           <div
-            className="absolute inset-0 opacity-10"
+            className="absolute inset-0 opacity-10 pointer-events-none"
             style={{
               background: `radial-gradient(circle at top right, ${spot.list?.color || "#ff2d92"}, transparent 70%)`,
             }}
@@ -615,7 +694,7 @@ function ListCard({
       {/* Glow effect for top 3 */}
       {rank <= 3 && (
         <div
-          className="absolute inset-0 opacity-10"
+          className="absolute inset-0 opacity-10 pointer-events-none"
           style={{
             background: `radial-gradient(circle at top right, ${list.color}, transparent 70%)`,
           }}
@@ -709,7 +788,7 @@ function UserCard({
       {/* Glow effect for top 3 */}
       {rank <= 3 && (
         <div
-          className="absolute inset-0 opacity-5"
+          className="absolute inset-0 opacity-5 pointer-events-none"
           style={{
             background: "radial-gradient(circle at top right, #ff2d92, transparent 70%)",
           }}
