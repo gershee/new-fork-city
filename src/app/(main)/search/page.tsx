@@ -129,11 +129,13 @@ export default function SearchPage() {
       }
 
       // Fetch all lists with pins
-      const { data: lists } = await supabase
+      const { data: lists, error: listsError } = await supabase
         .from("lists")
         .select(`*, profile:profiles!user_id(id, username, display_name, avatar_url), pins!list_id(id), likes:list_likes!list_id(id)`)
         .order("updated_at", { ascending: false })
         .limit(30);
+
+      console.log("Search suggested lists:", { lists, listsError: listsError?.message || listsError, count: lists?.length });
 
       if (lists && lists.length > 0) {
         const listsWithCounts = lists
@@ -200,11 +202,13 @@ export default function SearchPage() {
             setUserResults(usersWithStats);
           }
         } else if (activeTab === "lists") {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from("lists")
             .select(`*, profile:profiles!user_id(id, username, display_name, avatar_url), pins!list_id(id)`)
             .or(`name.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
             .limit(20);
+
+          console.log("Lists search result:", { data, error: error?.message || error, query: searchQuery });
 
           if (data) {
             const listsWithCount = data.map((list: any) => ({
