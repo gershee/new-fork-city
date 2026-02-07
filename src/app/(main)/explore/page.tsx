@@ -88,7 +88,7 @@ function MapPage() {
     return counts;
   }, [pins]);
 
-  // Calculate trending pins (locations on 2+ lists)
+  // Calculate trending pins (locations with high ratings or on multiple lists)
   const trendingPins = useMemo(() => {
     const tolerance = 0.001;
     const locationMap = new Map<string, Pin[]>();
@@ -105,18 +105,30 @@ function MapPage() {
       locationMap.get(key)!.push(pin);
     });
 
-    // Filter to locations with 2+ unique lists
+    // Filter to trending locations:
+    // - Locations with 2+ unique lists (popular)
+    // - OR locations with high ratings (4-5 stars) and visited
     const trending: Pin[] = [];
     locationMap.forEach((pinsAtLocation) => {
       const uniqueLists = new Set(pinsAtLocation.map((p) => p.list_id));
-      if (uniqueLists.size >= 2) {
-        // Use the most recent pin as representative
+      const hasHighRating = pinsAtLocation.some(
+        (p) => p.personal_rating && p.personal_rating >= 4 && p.is_visited
+      );
+
+      if (uniqueLists.size >= 2 || hasHighRating) {
+        // Use the highest rated or most recent pin as representative
         const sorted = [...pinsAtLocation].sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          (a, b) =>
+            (b.personal_rating || 0) - (a.personal_rating || 0) ||
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
         trending.push(sorted[0]);
       }
     });
+
+    console.log("[Trending] Total pins:", pins.length);
+    console.log("[Trending] Locations found:", locationMap.size);
+    console.log("[Trending] Trending locations:", trending.length);
 
     return trending;
   }, [pins]);
@@ -133,12 +145,15 @@ function MapPage() {
     }
   }, [searchParams]);
 
-  // Filter pins by enabled layers
+  // Filter pins by enabled layers and ensure they have valid list data
   useEffect(() => {
+    // Filter out pins without list data (stray emojis)
+    const validPins = allPins.filter((pin) => pin.list && pin.list.emoji_icon);
+
     if (enabledLayers.size === 0) {
-      setPins(allPins);
+      setPins(validPins);
     } else {
-      setPins(allPins.filter((pin) => enabledLayers.has(pin.list_id)));
+      setPins(validPins.filter((pin) => enabledLayers.has(pin.list_id)));
     }
   }, [allPins, enabledLayers]);
 
