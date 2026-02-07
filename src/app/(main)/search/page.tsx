@@ -58,9 +58,11 @@ export default function SearchPage() {
 
   // Users state
   const [userResults, setUserResults] = useState<UserResult[]>([]);
+  const [suggestedUsers, setSuggestedUsers] = useState<UserResult[]>([]);
 
   // Lists state
   const [listResults, setListResults] = useState<ListResult[]>([]);
+  const [suggestedLists, setSuggestedLists] = useState<ListResult[]>([]);
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -87,6 +89,62 @@ export default function SearchPage() {
       }
     };
     loadData();
+  }, []);
+
+  // Load suggested users and lists
+  useEffect(() => {
+    const loadSuggestions = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Fetch top users by follower count
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("*")
+        .neq("id", user?.id || "")
+        .limit(20);
+
+      if (profiles) {
+        const usersWithStats = await Promise.all(
+          profiles.map(async (profile) => {
+            const [followersResult, listsResult] = await Promise.all([
+              supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", profile.id),
+              supabase.from("lists").select("*", { count: "exact", head: true }).eq("user_id", profile.id).eq("is_public", true),
+            ]);
+            return {
+              ...profile,
+              followers_count: followersResult.count || 0,
+              lists_count: listsResult.count || 0,
+            };
+          })
+        );
+        // Sort by follower count and take top 10
+        const sorted = usersWithStats.sort((a, b) => b.followers_count - a.followers_count).slice(0, 10);
+        setSuggestedUsers(sorted);
+      }
+
+      // Fetch top lists by likes/pins count
+      const { data: lists } = await supabase
+        .from("lists")
+        .select(`*, profile:profiles(id, username, display_name, avatar_url), pins:pins(count), likes:list_likes(count)`)
+        .eq("is_public", true)
+        .neq("user_id", user?.id || "")
+        .limit(20);
+
+      if (lists) {
+        const listsWithCounts = lists.map((list: any) => ({
+          ...list,
+          pins_count: list.pins?.[0]?.count || 0,
+          likes_count: list.likes?.[0]?.count || 0,
+        }));
+        // Sort by likes + pins and take top 10
+        const sorted = listsWithCounts
+          .sort((a: any, b: any) => (b.likes_count + b.pins_count) - (a.likes_count + a.pins_count))
+          .slice(0, 10);
+        setSuggestedLists(sorted);
+      }
+    };
+    loadSuggestions();
   }, []);
 
   // Debounced search
@@ -456,7 +514,61 @@ export default function SearchPage() {
               </div>
             )}
 
-            {!query && (
+            {!query && suggestedUsers.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-lg">🔥</span>
+                  <h2 className="text-sm font-medium text-text-secondary">Top Foodies</h2>
+                </div>
+                <div className="space-y-2">
+                  <AnimatePresence>
+                    {suggestedUsers.map((user, index) => (
+                      <motion.button
+                        key={user.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        onClick={() => router.push(`/user/${user.username}`)}
+                        className="w-full text-left bg-surface-elevated rounded-xl p-4 hover:bg-surface-hover transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <Avatar
+                              src={user.avatar_url}
+                              alt={user.display_name || user.username}
+                              fallback={(user.display_name || user.username)?.[0]}
+                              size="md"
+                            />
+                            {index < 3 && (
+                              <span className="absolute -top-1 -right-1 text-sm">
+                                {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-text-primary truncate">
+                              {user.display_name || user.username}
+                            </h3>
+                            <p className="text-sm text-text-muted">@{user.username}</p>
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="text-xs text-text-secondary">
+                                <span className="font-medium text-neon-pink">{user.followers_count}</span> followers
+                              </span>
+                              <span className="text-xs text-text-secondary">
+                                <span className="font-medium text-neon-cyan">{user.lists_count}</span> lists
+                              </span>
+                            </div>
+                          </div>
+                          <ChevronRightIcon />
+                        </div>
+                      </motion.button>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </div>
+            )}
+
+            {!query && suggestedUsers.length === 0 && (
               <div className="text-center py-12">
                 <span className="text-4xl mb-4 block">👤</span>
                 <p className="text-text-secondary">Search for users by name or username</p>
@@ -528,7 +640,77 @@ export default function SearchPage() {
               </div>
             )}
 
-            {!query && (
+            {!query && suggestedLists.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-lg">📈</span>
+                  <h2 className="text-sm font-medium text-text-secondary">Trending Lists</h2>
+                </div>
+                <div className="space-y-2">
+                  <AnimatePresence>
+                    {suggestedLists.map((list, index) => (
+                      <motion.button
+                        key={list.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        onClick={() => router.push(`/lists/${list.id}`)}
+                        className="w-full text-left bg-surface-elevated rounded-xl p-4 hover:bg-surface-hover transition-colors relative overflow-hidden"
+                      >
+                        <div
+                          className="absolute top-0 left-0 right-0 h-1"
+                          style={{ backgroundColor: list.color }}
+                        />
+                        {index < 3 && (
+                          <span className="absolute top-2 right-2 text-sm">
+                            {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}
+                          </span>
+                        )}
+                        <div className="flex items-start gap-3">
+                          <div
+                            className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0"
+                            style={{ backgroundColor: `${list.color}20` }}
+                          >
+                            {list.emoji_icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-text-primary truncate">{list.name}</h3>
+                            {list.description && (
+                              <p className="text-sm text-text-secondary truncate">{list.description}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs bg-surface px-2 py-0.5 rounded-full text-text-muted">
+                                📍 {list.pins_count} {list.pins_count === 1 ? "spot" : "spots"}
+                              </span>
+                              {(list as any).likes_count > 0 && (
+                                <span className="text-xs bg-neon-pink/10 px-2 py-0.5 rounded-full text-neon-pink">
+                                  ❤️ {(list as any).likes_count}
+                                </span>
+                              )}
+                            </div>
+                            {/* Creator */}
+                            <div className="flex items-center gap-2 mt-2">
+                              <Avatar
+                                src={list.profile?.avatar_url}
+                                alt={list.profile?.display_name || list.profile?.username}
+                                fallback={(list.profile?.display_name || list.profile?.username)?.[0]}
+                                size="xs"
+                              />
+                              <span className="text-xs text-text-muted">
+                                @{list.profile?.username}
+                              </span>
+                            </div>
+                          </div>
+                          <ChevronRightIcon />
+                        </div>
+                      </motion.button>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </div>
+            )}
+
+            {!query && suggestedLists.length === 0 && (
               <div className="text-center py-12">
                 <span className="text-4xl mb-4 block">📋</span>
                 <p className="text-text-secondary">Search for public lists</p>
