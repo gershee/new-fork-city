@@ -52,7 +52,7 @@ export default function TrendingPage() {
     const fetchTrending = async () => {
       const supabase = createClient();
 
-      // Fetch trending spots (pins that appear in multiple lists or highly rated)
+      // Fetch trending spots (all pins from public lists)
       const { data: pinsData } = await supabase
         .from("pins")
         .select(`
@@ -63,10 +63,8 @@ export default function TrendingPage() {
           )
         `)
         .eq("list.is_public", true)
-        .eq("is_visited", true)
-        .gte("personal_rating", 4)
         .order("created_at", { ascending: false })
-        .limit(20);
+        .limit(100);
 
       if (pinsData) {
         // Group by location (approximate) and count
@@ -90,7 +88,7 @@ export default function TrendingPage() {
         setSpots(sortedSpots);
       }
 
-      // Fetch trending lists (public lists with most pins)
+      // Fetch trending lists (public lists)
       const { data: listsData } = await supabase
         .from("lists")
         .select(`
@@ -100,7 +98,7 @@ export default function TrendingPage() {
         `)
         .eq("is_public", true)
         .order("updated_at", { ascending: false })
-        .limit(20);
+        .limit(50);
 
       if (listsData) {
         const listsWithCount = listsData
@@ -108,7 +106,6 @@ export default function TrendingPage() {
             ...list,
             pins_count: list.pins?.[0]?.count || 0,
           }))
-          .filter((list: any) => list.pins_count > 0)
           .sort((a: any, b: any) => b.pins_count - a.pins_count);
         setLists(listsWithCount);
       }

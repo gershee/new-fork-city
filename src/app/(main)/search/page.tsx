@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Button, BottomSheet, Avatar } from "@/components/ui";
@@ -431,6 +431,8 @@ export default function SearchPage() {
   );
 }
 
+type SortOption = "saves" | "rating" | "recent";
+
 // Place Details Component
 function PlaceDetails({
   place,
@@ -445,6 +447,42 @@ function PlaceDetails({
   onAddToList: () => void;
   onViewList: (listId: string) => void;
 }) {
+  const [sortBy, setSortBy] = useState<SortOption>("saves");
+
+  // Calculate stats
+  const saveCount = existingPins.length;
+  const avgRating = existingPins.length > 0
+    ? existingPins.reduce((sum, { pin }) => sum + (pin.personal_rating || 0), 0) / existingPins.filter(p => p.pin.personal_rating).length || 0
+    : 0;
+  const visitedCount = existingPins.filter(({ pin }) => pin.is_visited).length;
+
+  // Sort pins based on selected option
+  const sortedPins = useMemo(() => {
+    const pins = [...existingPins];
+    switch (sortBy) {
+      case "rating":
+        return pins.sort((a, b) => (b.pin.personal_rating || 0) - (a.pin.personal_rating || 0));
+      case "recent":
+        return pins.sort((a, b) => new Date(b.pin.created_at).getTime() - new Date(a.pin.created_at).getTime());
+      case "saves":
+      default:
+        return pins;
+    }
+  }, [existingPins, sortBy]);
+
+  // Get unique lists
+  const uniqueLists = useMemo(() => {
+    const listMap = new Map<string, { list: List; count: number }>();
+    existingPins.forEach(({ list }) => {
+      if (!listMap.has(list.id)) {
+        listMap.set(list.id, { list, count: 1 });
+      } else {
+        listMap.get(list.id)!.count++;
+      }
+    });
+    return Array.from(listMap.values());
+  }, [existingPins]);
+
   return (
     <div className="space-y-4">
       {/* Address & Category */}
@@ -457,22 +495,98 @@ function PlaceDetails({
         )}
       </div>
 
+      {/* Social Proof Stats */}
+      {!isLoading && saveCount > 0 && (
+        <div className="bg-surface rounded-xl p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <p className="text-lg font-bold text-neon-pink">{saveCount}</p>
+                <p className="text-xs text-text-muted">saves</p>
+              </div>
+              {avgRating > 0 && (
+                <div className="text-center">
+                  <p className="text-lg font-bold text-neon-orange">{avgRating.toFixed(1)}★</p>
+                  <p className="text-xs text-text-muted">avg rating</p>
+                </div>
+              )}
+              <div className="text-center">
+                <p className="text-lg font-bold text-neon-green">{visitedCount}</p>
+                <p className="text-xs text-text-muted">visited</p>
+              </div>
+            </div>
+            {saveCount >= 5 && (
+              <span className="text-2xl">🔥</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Lists containing this place */}
+      {!isLoading && uniqueLists.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-text-secondary mb-2">
+            On {uniqueLists.length} {uniqueLists.length === 1 ? "list" : "lists"}
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {uniqueLists.slice(0, 5).map(({ list }) => (
+              <button
+                key={list.id}
+                onClick={() => onViewList(list.id)}
+                className="px-3 py-1.5 rounded-full text-xs flex items-center gap-1.5 bg-surface-elevated hover:bg-surface-hover transition-colors"
+                style={{ borderColor: list.color, borderWidth: 1 }}
+              >
+                <span>{list.emoji_icon}</span>
+                <span>{list.name}</span>
+              </button>
+            ))}
+            {uniqueLists.length > 5 && (
+              <span className="px-2 py-1.5 text-xs text-text-muted">
+                +{uniqueLists.length - 5} more
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Who has saved this */}
       <div>
-        <h3 className="text-sm font-medium text-text-secondary mb-2">
-          Saved by
-        </h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium text-text-secondary">
+            Saved by
+          </h3>
+          {existingPins.length > 1 && (
+            <div className="flex gap-1">
+              {(["saves", "rating", "recent"] as SortOption[]).map((option) => (
+                <button
+                  key={option}
+                  onClick={() => setSortBy(option)}
+                  className={`px-2 py-1 rounded-md text-xs transition-colors ${
+                    sortBy === option
+                      ? "bg-neon-pink text-white"
+                      : "bg-surface text-text-muted hover:text-text-primary"
+                  }`}
+                >
+                  {option === "saves" ? "Popular" : option === "rating" ? "Rating" : "Recent"}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {isLoading ? (
           <div className="flex items-center justify-center py-4">
             <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : existingPins.length === 0 ? (
-          <p className="text-sm text-text-muted py-2">
-            No one you follow has saved this place yet. Be the first!
-          </p>
+          <div className="text-center py-4 bg-surface rounded-xl">
+            <p className="text-2xl mb-2">✨</p>
+            <p className="text-sm text-text-muted">
+              Be the first to save this place!
+            </p>
+          </div>
         ) : (
           <div className="space-y-2">
-            {existingPins.map(({ pin, list, owner }) => (
+            {sortedPins.map(({ pin, list, owner }) => (
               <button
                 key={pin.id}
                 onClick={() => onViewList(list.id)}
@@ -490,9 +604,19 @@ function PlaceDetails({
                   </p>
                   <p className="text-sm text-text-muted truncate">
                     {list.emoji_icon} {list.name}
-                    {pin.is_visited && " • Visited"}
-                    {pin.personal_rating && ` • ${"★".repeat(pin.personal_rating)}`}
                   </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {pin.personal_rating && (
+                    <span className="text-sm text-neon-orange">
+                      {"★".repeat(pin.personal_rating)}
+                    </span>
+                  )}
+                  {pin.is_visited && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-neon-green/20 text-neon-green">
+                      ✓
+                    </span>
+                  )}
                 </div>
                 <ChevronRightIcon />
               </button>

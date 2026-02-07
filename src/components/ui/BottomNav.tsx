@@ -19,6 +19,12 @@ const navItems: NavItem[] = [
     activeIcon: <MapIconFilled />,
   },
   {
+    href: "/trending",
+    label: "Trending",
+    icon: <TrendingIcon />,
+    activeIcon: <TrendingIconFilled />,
+  },
+  {
     href: "/search",
     label: "Search",
     icon: <SearchIcon />,
@@ -29,12 +35,6 @@ const navItems: NavItem[] = [
     label: "Lists",
     icon: <ListIcon />,
     activeIcon: <ListIconFilled />,
-  },
-  {
-    href: "/feed",
-    label: "Feed",
-    icon: <FeedIcon />,
-    activeIcon: <FeedIconFilled />,
   },
   {
     href: "/profile",
