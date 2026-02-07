@@ -976,7 +976,7 @@ function SavePinForm({
 
       const { data: newList, error } = await supabase
         .from("lists")
-        .insert({ user_id: user.id, name: newListName.trim(), emoji_icon: newListEmoji, color: newListColor, is_public: false })
+        .insert({ user_id: user.id, name: newListName.trim(), emoji_icon: newListEmoji, color: newListColor, is_public: true })
         .select().single();
 
       if (error || !newList) { setIsLoading(false); return; }

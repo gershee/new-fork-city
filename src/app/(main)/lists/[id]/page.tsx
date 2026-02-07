@@ -206,7 +206,7 @@ export default function ListDetailPage() {
         description: list.description,
         emoji_icon: list.emoji_icon,
         color: list.color,
-        is_public: false, // Default copied lists to private
+        is_public: true, // Default copied lists to public
       })
       .select()
       .single();
@@ -1250,7 +1250,7 @@ function SavePinToListForm({
           name: newListName.trim(),
           emoji_icon: newListEmoji,
           color: newListColor,
-          is_public: false,
+          is_public: true,
         })
         .select()
         .single();
@@ -1490,7 +1490,7 @@ function BatchSaveForm({
           name: newListName.trim(),
           emoji_icon: newListEmoji,
           color: newListColor,
-          is_public: false,
+          is_public: true,
         })
         .select()
         .single();
