@@ -6,9 +6,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { MapView } from "@/components/map/MapView";
 import { Button, BottomSheet } from "@/components/ui";
 import { EditPinForm } from "@/components/pins/EditPinForm";
+import { PinDetail } from "@/components/pins/PinDetail";
 import { LikeButton } from "@/components/social/LikeButton";
 import { createClient } from "@/lib/supabase/client";
-import type { List, Pin } from "@/types";
+import type { List, Pin, Profile } from "@/types";
+
+interface SavedByInfo {
+  pin: Pin;
+  list: List;
+  owner: Profile;
+}
 
 const EMOJI_OPTIONS = [
   "📍", "🍕", "🍔", "🍜", "🍣", "🍷", "🍺", "☕", "🍰", "🌮",
@@ -44,6 +51,8 @@ export default function ListDetailPage() {
   const [likeCount, setLikeCount] = useState(0);
   const [showSavePin, setShowSavePin] = useState(false);
   const [savingPin, setSavingPin] = useState<Pin | null>(null);
+  const [savedByData, setSavedByData] = useState<SavedByInfo[]>([]);
+  const [isLoadingSavedBy, setIsLoadingSavedBy] = useState(false);
 
   // Multi-select state
   const [isSelectMode, setIsSelectMode] = useState(false);
@@ -278,6 +287,48 @@ export default function ListDetailPage() {
     setEditingPin(pin);
   };
 
+  const fetchSavedBy = async (pin: Pin) => {
+    setIsLoadingSavedBy(true);
+    setSavedByData([]);
+
+    const supabase = createClient();
+    const tolerance = 0.0005; // ~50m
+
+    const { data: pinsData } = await supabase
+      .from("pins")
+      .select(`
+        *,
+        list:lists!list_id(*, profile:profiles!user_id(*))
+      `)
+      .neq("id", pin.id)
+      .gte("lat", pin.lat - tolerance)
+      .lte("lat", pin.lat + tolerance)
+      .gte("lng", pin.lng - tolerance)
+      .lte("lng", pin.lng + tolerance);
+
+    if (pinsData) {
+      const savedBy: SavedByInfo[] = pinsData
+        .filter((p: any) => p.list) // Filter out pins without list data
+        .map((p: any) => ({
+          pin: p,
+          list: p.list,
+          owner: p.list.profile,
+        }));
+      setSavedByData(savedBy);
+    }
+
+    setIsLoadingSavedBy(false);
+  };
+
+  const handlePinClick = (pin: Pin) => {
+    if (isSelectMode) {
+      togglePinSelection(pin.id);
+    } else {
+      setSelectedPin(pin);
+      fetchSavedBy(pin);
+    }
+  };
+
   const handlePinUpdated = (updatedPin: Pin) => {
     // If pin was moved to a different list, remove it from current view
     if (updatedPin.list_id !== listId) {
@@ -444,7 +495,7 @@ export default function ListDetailPage() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    onClick={() => isSelectMode ? togglePinSelection(pin.id) : setSelectedPin(pin)}
+                    onClick={() => handlePinClick(pin)}
                     className={`bg-surface-elevated rounded-xl p-4 cursor-pointer hover:bg-surface-hover transition-colors ${
                       selectedPinIds.has(pin.id) ? "ring-2 ring-neon-pink" : ""
                     }`}
@@ -498,7 +549,7 @@ export default function ListDetailPage() {
         <div className="h-[calc(100vh-180px)]">
           <MapView
             pins={pins}
-            onPinClick={setSelectedPin}
+            onPinClick={handlePinClick}
             center={
               pins.length > 0
                 ? [pins[0].lng, pins[0].lat]
@@ -577,83 +628,25 @@ export default function ListDetailPage() {
       {/* Pin Detail Sheet */}
       <BottomSheet
         isOpen={selectedPin !== null && editingPin === null}
-        onClose={() => setSelectedPin(null)}
+        onClose={() => {
+          setSelectedPin(null);
+          setSavedByData([]);
+        }}
         title={selectedPin?.name}
       >
         {selectedPin && (
-          <div className="space-y-4">
-            <p className="text-text-secondary">{selectedPin.address}</p>
-
-            {/* Status */}
-            <button
-              onClick={() => handleToggleVisited(selectedPin)}
-              className={`w-full px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                selectedPin.is_visited
-                  ? "bg-neon-green/20 text-neon-green"
-                  : "bg-neon-cyan/20 text-neon-cyan"
-              }`}
-            >
-              {selectedPin.is_visited
-                ? "✓ Been here — tap to mark as want to try"
-                : "Want to try — tap to mark as visited"}
-            </button>
-
-            {/* Rating */}
-            {selectedPin.personal_rating && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-text-secondary">Rating:</span>
-                <span className="text-neon-orange">
-                  {"★".repeat(selectedPin.personal_rating)}
-                  {"☆".repeat(5 - selectedPin.personal_rating)}
-                </span>
-              </div>
-            )}
-
-            {/* Notes */}
-            {selectedPin.personal_notes && (
-              <div className="bg-surface rounded-xl p-4">
-                <p className="text-text-primary">{selectedPin.personal_notes}</p>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="secondary"
-                className="flex-1"
-                onClick={() => {
-                  window.open(
-                    `https://www.google.com/maps/dir/?api=1&destination=${selectedPin.lat},${selectedPin.lng}`,
-                    "_blank"
-                  );
-                }}
-              >
-                Directions
-              </Button>
-              {isOwner ? (
-                <Button
-                  variant="ghost"
-                  className="flex-1"
-                  onClick={() => handleEditPin(selectedPin)}
-                >
-                  Edit
-                </Button>
-              ) : (
-                <Button
-                  variant="primary"
-                  className="flex-1"
-                  onClick={() => {
-                    setSavingPin(selectedPin);
-                    setSelectedPin(null);
-                    setShowSavePin(true);
-                  }}
-                >
-                  Save
-                </Button>
-              )}
-              <PinLikeButton pinId={selectedPin.id} />
-            </div>
-          </div>
+          <PinDetail
+            pin={{ ...selectedPin, list: list || undefined }}
+            isOwn={isOwner}
+            onEdit={() => handleEditPin(selectedPin)}
+            savedBy={savedByData}
+            isLoadingSavedBy={isLoadingSavedBy}
+            onSaveToList={!isOwner ? () => {
+              setSavingPin(selectedPin);
+              setSelectedPin(null);
+              setShowSavePin(true);
+            } : undefined}
+          />
         )}
       </BottomSheet>
 
