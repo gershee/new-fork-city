@@ -150,10 +150,16 @@ function MapPage() {
     // Filter out pins without list data (stray emojis)
     const validPins = allPins.filter((pin) => pin.list && pin.list.emoji_icon);
 
+    console.log("[Filter] All pins:", allPins.length);
+    console.log("[Filter] Valid pins after filter:", validPins.length);
+    console.log("[Filter] Filtered out:", allPins.length - validPins.length);
+
     if (enabledLayers.size === 0) {
       setPins(validPins);
     } else {
-      setPins(validPins.filter((pin) => enabledLayers.has(pin.list_id)));
+      const layerFilteredPins = validPins.filter((pin) => enabledLayers.has(pin.list_id));
+      console.log("[Filter] After layer filter:", layerFilteredPins.length);
+      setPins(layerFilteredPins);
     }
   }, [allPins, enabledLayers]);
 
@@ -273,6 +279,13 @@ function MapPage() {
       }
 
       const combinedPins = [...(myPinsData || []), ...followedPins] as Pin[];
+
+      // Debug: Log pins without valid list data
+      const invalidPins = combinedPins.filter((pin) => !pin.list || !pin.list.emoji_icon);
+      if (invalidPins.length > 0) {
+        console.log("[DEBUG] Found pins without valid list data:", invalidPins);
+      }
+
       setAllPins(combinedPins);
 
       setIsLoading(false);

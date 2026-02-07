@@ -361,9 +361,15 @@ export function MapView({
 
     // Add or update markers for current pins
     pins.forEach((pin) => {
+      // Skip pins without valid list data (defensive check)
+      if (!pin.list || !pin.list.emoji_icon) {
+        console.warn("[MapView] Skipping pin without valid list data:", pin);
+        return;
+      }
+
       if (!currentMarkers.has(pin.id)) {
-        const emoji = pin.list?.emoji_icon || "📍";
-        const color = pin.list?.color || "#ff2d92";
+        const emoji = pin.list.emoji_icon;
+        const color = pin.list.color || "#ff2d92";
         const listCount = pinListCounts?.get(pin.id);
         const marker = new mapboxgl.Marker({
           element: createEmojiMarker(emoji, color, () => {
