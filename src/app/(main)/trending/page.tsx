@@ -53,7 +53,7 @@ export default function TrendingPage() {
       const supabase = createClient();
 
       // Fetch trending spots (all pins)
-      const { data: pinsData } = await supabase
+      const { data: pinsData, error: pinsError } = await supabase
         .from("pins")
         .select(`
           *,
@@ -64,6 +64,8 @@ export default function TrendingPage() {
         `)
         .order("created_at", { ascending: false })
         .limit(100);
+
+      console.log("Pins query result:", { pinsData, pinsError, count: pinsData?.length });
 
       if (pinsData && pinsData.length > 0) {
         // Group by location (approximate) and count
@@ -89,7 +91,7 @@ export default function TrendingPage() {
       }
 
       // Fetch trending lists with their pins
-      const { data: listsData } = await supabase
+      const { data: listsData, error: listsError } = await supabase
         .from("lists")
         .select(`
           *,
@@ -98,6 +100,8 @@ export default function TrendingPage() {
         `)
         .order("updated_at", { ascending: false })
         .limit(50);
+
+      console.log("Lists query result:", { listsData, listsError, count: listsData?.length });
 
       if (listsData && listsData.length > 0) {
         const listsWithCount = listsData
