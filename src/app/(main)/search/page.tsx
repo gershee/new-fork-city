@@ -131,7 +131,7 @@ export default function SearchPage() {
       // Fetch all lists with pins
       const { data: lists, error: listsError } = await supabase
         .from("lists")
-        .select(`*, profile:profiles!user_id(id, username, display_name, avatar_url), pins!list_id(id), likes:list_likes!list_id(id)`)
+        .select(`*, profile:profiles!user_id(id, username, display_name, avatar_url), pins!list_id(id)`)
         .order("updated_at", { ascending: false })
         .limit(30);
 
@@ -143,11 +143,10 @@ export default function SearchPage() {
           .map((list: any) => ({
             ...list,
             pins_count: Array.isArray(list.pins) ? list.pins.length : 0,
-            likes_count: Array.isArray(list.likes) ? list.likes.length : 0,
           }));
-        // Sort by pins count (lists with content), then by likes
+        // Sort by pins count (lists with content)
         const sorted = listsWithCounts
-          .sort((a: any, b: any) => (b.pins_count + b.likes_count) - (a.pins_count + a.likes_count))
+          .sort((a: any, b: any) => b.pins_count - a.pins_count)
           .slice(0, 10);
         setSuggestedLists(sorted);
       }
