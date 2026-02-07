@@ -143,7 +143,7 @@ export default function ListDetailPage() {
           .select("*")
           .eq("list_id", listId)
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
 
         setIsLiked(!!likeData);
       }

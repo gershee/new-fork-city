@@ -76,7 +76,7 @@ export default function UserProfilePage() {
                 .select("*")
                 .eq("follower_id", currentUser.id)
                 .eq("following_id", profileData.id)
-                .single()
+                .maybeSingle()
             : Promise.resolve({ data: null }),
         ]);
 
