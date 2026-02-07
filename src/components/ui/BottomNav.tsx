@@ -25,6 +25,12 @@ const navItems: NavItem[] = [
     activeIcon: <TrendingIconFilled />,
   },
   {
+    href: "/feed",
+    label: "Feed",
+    icon: <FeedIcon />,
+    activeIcon: <FeedIconFilled />,
+  },
+  {
     href: "/search",
     label: "Search",
     icon: <SearchIcon />,

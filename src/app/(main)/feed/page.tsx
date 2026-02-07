@@ -449,14 +449,15 @@ function UserActivityRow({
   const pinCount = activities.filter((a) => a.type === "pin_added").length;
   const listCount = activities.filter((a) => a.type === "list_created").length;
 
-  // Summary text
+  // Summary text with user name and action
+  const userName = user.display_name || user.username;
   let summary = "";
   if (pinCount > 0 && listCount > 0) {
-    summary = `${pinCount} spot${pinCount > 1 ? "s" : ""}, ${listCount} list${listCount > 1 ? "s" : ""}`;
+    summary = `${userName} added ${pinCount} spot${pinCount > 1 ? "s" : ""}, created ${listCount} list${listCount > 1 ? "s" : ""}`;
   } else if (pinCount > 0) {
-    summary = `${pinCount} spot${pinCount > 1 ? "s" : ""} saved`;
+    summary = `${userName} added ${pinCount} spot${pinCount > 1 ? "s" : ""}`;
   } else {
-    summary = `${listCount} list${listCount > 1 ? "s" : ""} created`;
+    summary = `${userName} created ${listCount} list${listCount > 1 ? "s" : ""}`;
   }
 
   return (
