@@ -53,15 +53,7 @@ export default function TrendingPage() {
       const supabase = createClient();
 
       // Fetch trending spots (all pins)
-      // First try a simple query to test if it works
-      const { data: simpleTest, error: simpleError } = await supabase
-        .from("pins")
-        .select("*")
-        .limit(5);
-
-      console.log("Simple pins test:", { simpleTest, simpleError: simpleError?.message || simpleError });
-
-      const { data: pinsData, error: pinsError } = await supabase
+      const { data: pinsData } = await supabase
         .from("pins")
         .select(`
           *,
@@ -72,8 +64,6 @@ export default function TrendingPage() {
         `)
         .order("created_at", { ascending: false })
         .limit(100);
-
-      console.log("Pins query result:", { pinsData, pinsError: pinsError?.message || pinsError, count: pinsData?.length });
 
       if (pinsData && pinsData.length > 0) {
         // Group by location (approximate) and count
@@ -99,14 +89,7 @@ export default function TrendingPage() {
       }
 
       // Fetch trending lists with their pins
-      const { data: simpleListsTest, error: simpleListsError } = await supabase
-        .from("lists")
-        .select("*")
-        .limit(5);
-
-      console.log("Simple lists test:", { simpleListsTest, simpleListsError: simpleListsError?.message || simpleListsError });
-
-      const { data: listsData, error: listsError } = await supabase
+      const { data: listsData } = await supabase
         .from("lists")
         .select(`
           *,
@@ -115,8 +98,6 @@ export default function TrendingPage() {
         `)
         .order("updated_at", { ascending: false })
         .limit(50);
-
-      console.log("Lists query result:", { listsData, listsError: listsError?.message || listsError, count: listsData?.length });
 
       if (listsData && listsData.length > 0) {
         const listsWithCount = listsData
