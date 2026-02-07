@@ -1,9 +1,9 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Button, Avatar, Badge, Card } from "@/components/ui";
-import { ShimmerEffect, HotGlowRing } from "@/components/effects";
+import { Button, Avatar } from "@/components/ui";
 import type { Pin, List, Profile } from "@/types";
 
 interface SavedByInfo {
@@ -21,56 +21,104 @@ interface PinDetailProps {
   onSaveToList?: () => void;
 }
 
+type SortOption = "saves" | "rating" | "recent";
+
 export function PinDetail({ pin, isOwn, onEdit, savedBy = [], isLoadingSavedBy, onSaveToList }: PinDetailProps) {
   const router = useRouter();
-  const ratingStars = pin.personal_rating
-    ? "★".repeat(pin.personal_rating)
-    : null;
+  const [sortBy, setSortBy] = useState<SortOption>("saves");
 
-  // Calculate popularity (viral meter)
+  // Calculate stats
   const totalSaves = savedBy.length + 1; // +1 for current pin
-  const getViralLevel = (count: number) => {
-    if (count >= 10) return { label: "🔥 Hot spot", color: "text-orange-400", percent: 100 };
-    if (count >= 5) return { label: "📈 Popular", color: "text-neon-pink", percent: 70 };
-    if (count >= 3) return { label: "⭐ Rising", color: "text-neon-cyan", percent: 40 };
-    if (count >= 2) return { label: "💫 Shared", color: "text-neon-purple", percent: 20 };
-    return null;
-  };
-  const viralLevel = getViralLevel(totalSaves);
+  const avgRating = useMemo(() => {
+    const allPins = [pin, ...savedBy.map(s => s.pin)];
+    const ratedPins = allPins.filter(p => p.personal_rating);
+    if (ratedPins.length === 0) return 0;
+    return ratedPins.reduce((sum, p) => sum + (p.personal_rating || 0), 0) / ratedPins.length;
+  }, [pin, savedBy]);
+
+  const visitedCount = useMemo(() => {
+    const allPins = [pin, ...savedBy.map(s => s.pin)];
+    return allPins.filter(p => p.is_visited).length;
+  }, [pin, savedBy]);
+
+  // Sort saved by
+  const sortedSavedBy = useMemo(() => {
+    const items = [...savedBy];
+    switch (sortBy) {
+      case "rating":
+        return items.sort((a, b) => (b.pin.personal_rating || 0) - (a.pin.personal_rating || 0));
+      case "recent":
+        return items.sort((a, b) => new Date(b.pin.created_at).getTime() - new Date(a.pin.created_at).getTime());
+      default:
+        return items;
+    }
+  }, [savedBy, sortBy]);
+
+  // Get unique lists
+  const uniqueLists = useMemo(() => {
+    const listMap = new Map<string, { list: List; count: number }>();
+    // Add current pin's list
+    if (pin.list) {
+      listMap.set(pin.list.id, { list: pin.list, count: 1 });
+    }
+    // Add saved by lists
+    savedBy.forEach(({ list }) => {
+      if (!listMap.has(list.id)) {
+        listMap.set(list.id, { list, count: 1 });
+      } else {
+        listMap.get(list.id)!.count++;
+      }
+    });
+    return Array.from(listMap.values());
+  }, [pin, savedBy]);
+
+  const isHot = totalSaves >= 5;
 
   return (
     <div className="space-y-4">
-      {/* Viral meter / popularity indicator */}
-      {viralLevel && (
+      {/* Address & Category */}
+      <div>
+        <p className="text-text-secondary">{pin.address}</p>
+        {pin.category && (
+          <span className="inline-block mt-2 text-xs px-2 py-1 rounded-full bg-surface text-text-muted">
+            {pin.category.split(",")[0]}
+          </span>
+        )}
+      </div>
+
+      {/* Stats Box */}
+      {!isLoadingSavedBy && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`bg-surface rounded-xl p-3 relative overflow-hidden ${totalSaves >= 10 ? "hot-glow" : ""}`}
+          className={`bg-surface rounded-xl p-3 ${isHot ? "hot-glow" : ""}`}
         >
-          {/* Hot spot glow ring */}
-          {totalSaves >= 10 && <HotGlowRing className="rounded-xl" />}
-
-          <div className="flex items-center justify-between mb-2">
-            <motion.span
-              className={`text-sm font-medium ${viralLevel.color} flex items-center gap-1.5`}
-              animate={totalSaves >= 10 ? { scale: [1, 1.05, 1] } : {}}
-              transition={{ duration: 1, repeat: Infinity }}
-            >
-              {viralLevel.label}
-            </motion.span>
-            <span className="text-xs text-text-muted">
-              Saved by {totalSaves} {totalSaves === 1 ? "person" : "people"}
-            </span>
-          </div>
-          <div className="h-1.5 bg-surface-elevated rounded-full overflow-hidden relative">
-            <motion.div
-              className="h-full bg-gradient-to-r from-neon-cyan via-neon-pink to-orange-400 rounded-full relative overflow-hidden"
-              initial={{ width: 0 }}
-              animate={{ width: `${viralLevel.percent}%` }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-            >
-              <ShimmerEffect />
-            </motion.div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <p className="text-lg font-bold text-neon-pink">{totalSaves}</p>
+                <p className="text-xs text-text-muted">saves</p>
+              </div>
+              {avgRating > 0 && (
+                <div className="text-center">
+                  <p className="text-lg font-bold text-neon-orange">{avgRating.toFixed(1)}★</p>
+                  <p className="text-xs text-text-muted">avg rating</p>
+                </div>
+              )}
+              <div className="text-center">
+                <p className="text-lg font-bold text-neon-green">{visitedCount}</p>
+                <p className="text-xs text-text-muted">visited</p>
+              </div>
+            </div>
+            {isHot && (
+              <motion.span
+                className="text-2xl"
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 1 }}
+              >
+                🔥
+              </motion.span>
+            )}
           </div>
         </motion.div>
       )}
@@ -79,7 +127,7 @@ export function PinDetail({ pin, isOwn, onEdit, savedBy = [], isLoadingSavedBy, 
       {!isOwn && pin.owner && (
         <button
           onClick={() => router.push(`/user/${pin.owner!.username}`)}
-          className="flex items-center gap-3 w-full bg-surface rounded-[--radius-md] p-3 hover:bg-surface-hover transition-colors"
+          className="flex items-center gap-3 w-full bg-surface rounded-xl p-3 hover:bg-surface-hover transition-colors"
         >
           <Avatar
             src={pin.owner.avatar_url}
@@ -96,114 +144,123 @@ export function PinDetail({ pin, isOwn, onEdit, savedBy = [], isLoadingSavedBy, 
         </button>
       )}
 
-      {/* List badge */}
-      {pin.list && (
-        <div
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm"
-          style={{ backgroundColor: `${pin.list.color}20` }}
-        >
-          <span>{pin.list.emoji_icon}</span>
-          <span style={{ color: pin.list.color }}>{pin.list.name}</span>
+      {/* On X lists */}
+      {!isLoadingSavedBy && uniqueLists.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-text-secondary mb-2">
+            On {uniqueLists.length} {uniqueLists.length === 1 ? "list" : "lists"}
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {uniqueLists.slice(0, 5).map(({ list }) => (
+              <button
+                key={list.id}
+                onClick={() => router.push(`/lists/${list.id}`)}
+                className="px-3 py-1.5 rounded-full text-xs flex items-center gap-1.5 bg-surface-elevated hover:bg-surface-hover transition-colors"
+                style={{ borderColor: list.color, borderWidth: 1 }}
+              >
+                <span>{list.emoji_icon}</span>
+                <span>{list.name}</span>
+              </button>
+            ))}
+            {uniqueLists.length > 5 && (
+              <span className="px-2 py-1.5 text-xs text-text-muted">+{uniqueLists.length - 5} more</span>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Address */}
-      <p className="text-text-secondary">{pin.address}</p>
-
-      {/* Rating & Status */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {ratingStars && (
-          <Badge variant="rating" size="md">
-            {ratingStars}
-          </Badge>
-        )}
-        <Badge variant={pin.is_visited ? "visited" : "want"} size="md">
-          {pin.is_visited ? "Been here" : "Want to try"}
-        </Badge>
-      </div>
-
-      {/* Notes */}
-      {pin.personal_notes && (
-        <Card variant="elevated" padding="md">
-          <p className="text-text-primary text-sm">{pin.personal_notes}</p>
-        </Card>
+      {/* Your rating & notes (if own pin) */}
+      {isOwn && (pin.personal_rating || pin.personal_notes) && (
+        <div className="bg-surface rounded-xl p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            {pin.personal_rating && (
+              <span className="text-neon-orange">{"★".repeat(pin.personal_rating)}</span>
+            )}
+            <span className={`text-xs px-2 py-0.5 rounded-full ${
+              pin.is_visited
+                ? "bg-neon-green/20 text-neon-green"
+                : "bg-neon-cyan/20 text-neon-cyan"
+            }`}>
+              {pin.is_visited ? "Been here" : "Want to try"}
+            </span>
+          </div>
+          {pin.personal_notes && (
+            <p className="text-sm text-text-secondary">{pin.personal_notes}</p>
+          )}
+        </div>
       )}
 
-      {/* Also saved by section with stacked avatars */}
-      {(savedBy.length > 0 || isLoadingSavedBy) && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-text-secondary">Also saved by</p>
-            {savedBy.length > 0 && !isLoadingSavedBy && (
-              <div className="avatar-stack flex items-center">
-                {savedBy.slice(0, 4).map(({ owner }, i) => (
-                  <motion.div
-                    key={owner.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.1 }}
-                  >
-                    <Avatar
-                      src={owner.avatar_url}
-                      alt={owner.display_name || owner.username}
-                      fallback={(owner.display_name || owner.username)?.[0]}
-                      size="xs"
-                    />
-                  </motion.div>
-                ))}
-                {savedBy.length > 4 && (
-                  <div className="w-6 h-6 rounded-full bg-surface-elevated border-2 border-surface flex items-center justify-center text-xs text-text-muted font-medium ml-[-8px]">
-                    +{savedBy.length - 4}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          {isLoadingSavedBy ? (
-            <div className="flex items-center justify-center py-3">
-              <div className="w-4 h-4 border-2 border-neon-pink border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {savedBy.slice(0, 5).map(({ pin: savedPin, list, owner }, index) => (
-                <motion.button
-                  key={savedPin.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  onClick={() => router.push(`/user/${owner.username}`)}
-                  className="w-full flex items-center gap-3 p-2.5 bg-surface rounded-lg hover:bg-surface-hover transition-colors"
+      {/* Saved by section */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium text-text-secondary">Saved by</h3>
+          {savedBy.length > 1 && (
+            <div className="flex gap-1">
+              {(["saves", "rating", "recent"] as SortOption[]).map((option) => (
+                <button
+                  key={option}
+                  onClick={() => setSortBy(option)}
+                  className={`px-2 py-1 rounded-md text-xs transition-colors ${
+                    sortBy === option ? "bg-neon-pink text-white" : "bg-surface text-text-muted hover:text-text-primary"
+                  }`}
                 >
-                  <Avatar
-                    src={owner.avatar_url}
-                    alt={owner.display_name || owner.username}
-                    fallback={(owner.display_name || owner.username)?.[0]}
-                    size="xs"
-                  />
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className="text-sm font-medium text-text-primary truncate">
-                      {owner.display_name || owner.username}
-                    </p>
-                    <p className="text-xs text-text-muted truncate">
-                      {list.emoji_icon} {list.name}
-                    </p>
-                  </div>
-                  <ChevronRightIcon />
-                </motion.button>
+                  {option === "saves" ? "Popular" : option === "rating" ? "Rating" : "Recent"}
+                </button>
               ))}
-              {savedBy.length > 5 && (
-                <p className="text-xs text-text-muted text-center pt-1">
-                  +{savedBy.length - 5} more
-                </p>
-              )}
             </div>
           )}
-        </motion.div>
-      )}
+        </div>
+
+        {isLoadingSavedBy ? (
+          <div className="flex items-center justify-center py-4">
+            <div className="w-5 h-5 border-2 border-neon-pink border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : savedBy.length === 0 ? (
+          <div className="text-center py-4 bg-surface rounded-xl">
+            <p className="text-2xl mb-2">✨</p>
+            <p className="text-sm text-text-muted">Be the first to save this place!</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {sortedSavedBy.map(({ pin: savedPin, list, owner }) => (
+              <button
+                key={savedPin.id}
+                onClick={() => router.push(`/lists/${list.id}`)}
+                className="w-full flex items-center gap-3 p-3 bg-surface rounded-xl hover:bg-surface-hover transition-colors text-left"
+              >
+                <Avatar
+                  src={owner.avatar_url}
+                  alt={owner.display_name || owner.username}
+                  fallback={(owner.display_name || owner.username)?.[0]}
+                  size="sm"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-text-primary truncate">
+                    {owner.display_name || owner.username}
+                  </p>
+                  <p className="text-sm text-text-muted truncate">
+                    {list.emoji_icon} {list.name}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {savedPin.personal_rating && (
+                    <span className="text-sm text-neon-orange">{"★".repeat(savedPin.personal_rating)}</span>
+                  )}
+                  {savedPin.is_visited && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-neon-green/20 text-neon-green">✓</span>
+                  )}
+                </div>
+                <ChevronRightIcon />
+              </button>
+            ))}
+            {savedBy.length > 5 && (
+              <p className="text-xs text-text-muted text-center pt-1">
+                +{savedBy.length - 5} more
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Actions */}
       <div className="flex gap-3 pt-2">
