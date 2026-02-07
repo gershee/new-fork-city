@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useCallback, Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { MapView } from "@/components/map/MapView";
 import { MapControls } from "@/components/map/MapControls";
-import { HeatmapLegend } from "@/components/map/HeatmapLegend";
 import { LayersSheet } from "@/components/map/LayersSheet";
 import { PinDetail } from "@/components/pins/PinDetail";
 import { EditPinForm } from "@/components/pins/EditPinForm";
@@ -43,7 +42,6 @@ function MapPage() {
   // Data state
   const [pins, setPins] = useState<Pin[]>([]);
   const [allPins, setAllPins] = useState<Pin[]>([]);
-  const [heatmapPins, setHeatmapPins] = useState<Pin[]>([]);
   const [lists, setLists] = useState<List[]>([]);
   const [enabledLayers, setEnabledLayers] = useState<Set<string>>(new Set());
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -61,26 +59,13 @@ function MapPage() {
   const [selectedPin, setSelectedPin] = useState<Pin | null>(null);
   const [editingPin, setEditingPin] = useState<Pin | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [mapMode, setMapMode] = useState<"pins" | "heatmap">("pins");
+  const [mapMode, setMapMode] = useState<"pins" | "trending">("pins");
   const [showLayersSheet, setShowLayersSheet] = useState(false);
   const [savedByData, setSavedByData] = useState<SavedByInfo[]>([]);
   const [isLoadingSavedBy, setIsLoadingSavedBy] = useState(false);
   const [showSaveSheet, setShowSaveSheet] = useState(false);
   const [isFirstSave, setIsFirstSave] = useState(false);
   const { showToast } = useToast();
-
-  // Track hot spots count for discover button badge
-  const hotSpotsCount = useMemo(() => {
-    return heatmapPins.filter((p) => {
-      // Count pins at similar location as "hot"
-      const nearby = heatmapPins.filter(
-        (other) =>
-          Math.abs(other.lat - p.lat) < 0.0005 &&
-          Math.abs(other.lng - p.lng) < 0.0005
-      );
-      return nearby.length >= 3;
-    }).length;
-  }, [heatmapPins]);
 
   // Calculate list counts for each pin location
   const pinListCounts = useMemo(() => {
@@ -103,10 +88,48 @@ function MapPage() {
     return counts;
   }, [pins]);
 
-  // Check URL for heatmap param
+  // Calculate trending pins (locations on 2+ lists)
+  const trendingPins = useMemo(() => {
+    const tolerance = 0.001;
+    const locationMap = new Map<string, Pin[]>();
+
+    // Group pins by location
+    pins.forEach((pin) => {
+      const latKey = Math.round(pin.lat / tolerance);
+      const lngKey = Math.round(pin.lng / tolerance);
+      const key = `${latKey},${lngKey}`;
+
+      if (!locationMap.has(key)) {
+        locationMap.set(key, []);
+      }
+      locationMap.get(key)!.push(pin);
+    });
+
+    // Filter to locations with 2+ unique lists
+    const trending: Pin[] = [];
+    locationMap.forEach((pinsAtLocation) => {
+      const uniqueLists = new Set(pinsAtLocation.map((p) => p.list_id));
+      if (uniqueLists.size >= 2) {
+        // Use the most recent pin as representative
+        const sorted = [...pinsAtLocation].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        trending.push(sorted[0]);
+      }
+    });
+
+    return trending;
+  }, [pins]);
+
+  // Track hot spots count for discover button badge (using trending pins)
+  const hotSpotsCount = useMemo(() => {
+    return trendingPins.length;
+  }, [trendingPins]);
+
+  // Check URL for trending param
   useEffect(() => {
-    if (searchParams.get("heatmap") === "true") {
-      setMapMode("heatmap");
+    if (searchParams.get("trending") === "true") {
+      setMapMode("trending");
     }
   }, [searchParams]);
 
@@ -237,15 +260,6 @@ function MapPage() {
       const combinedPins = [...(myPinsData || []), ...followedPins] as Pin[];
       setAllPins(combinedPins);
 
-      // Fetch ALL pins for heatmap
-      const { data: allPublicPins } = await supabase
-        .from("pins")
-        .select(`*, list:lists!list_id(id, name, emoji_icon, color, is_public)`);
-
-      if (allPublicPins) {
-        setHeatmapPins(allPublicPins as Pin[]);
-      }
-
       setIsLoading(false);
     };
 
@@ -322,10 +336,10 @@ function MapPage() {
     [handleCloseSheet]
   );
 
-  const handleModeChange = (mode: "pins" | "heatmap") => {
+  const handleModeChange = (mode: "pins" | "trending") => {
     setMapMode(mode);
-    if (mode === "heatmap") {
-      window.history.replaceState({}, "", "/explore?heatmap=true");
+    if (mode === "trending") {
+      window.history.replaceState({}, "", "/explore?trending=true");
     } else {
       window.history.replaceState({}, "", "/explore");
     }
@@ -367,17 +381,19 @@ function MapPage() {
     );
   }
 
-  const showHeatmap = mapMode === "heatmap";
+  const showTrending = mapMode === "trending";
+  const displayPins = showTrending ? trendingPins : pins;
 
   return (
     <div className="fixed inset-0 pb-16">
       {/* Map */}
       <div className="w-full h-full">
         <MapView
-          pins={showHeatmap ? heatmapPins : pins}
-          onPinClick={showHeatmap ? undefined : handlePinClick}
-          showHeatmap={showHeatmap}
+          pins={displayPins}
+          onPinClick={handlePinClick}
+          showHeatmap={false}
           pinListCounts={pinListCounts}
+          showTrending={showTrending}
         />
       </div>
 
@@ -387,15 +403,11 @@ function MapPage() {
         onModeChange={handleModeChange}
         onLayersClick={() => setShowLayersSheet(true)}
         pinCount={pins.length}
+        trendingCount={trendingPins.length}
       />
 
-      {/* Heatmap Legend */}
-      <AnimatePresence>
-        {showHeatmap && <HeatmapLegend pinCount={heatmapPins.length} />}
-      </AnimatePresence>
-
       {/* Floating Discover Button */}
-      {!showHeatmap && pins.length > 0 && (
+      {!showTrending && pins.length > 0 && (
         <motion.button
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -420,7 +432,7 @@ function MapPage() {
       )}
 
       {/* Empty state overlay */}
-      {!showHeatmap && pins.length === 0 && lists.length === 0 && (
+      {!showTrending && pins.length === 0 && lists.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-16">
           <div className="bg-surface/90 backdrop-blur-xl rounded-[--radius-lg] p-6 mx-6 pointer-events-auto">
             <EmptyState
@@ -437,7 +449,7 @@ function MapPage() {
       )}
 
       {/* Empty state with lists */}
-      {!showHeatmap && pins.length === 0 && lists.length > 0 && (
+      {!showTrending && pins.length === 0 && lists.length > 0 && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-surface/90 backdrop-blur-xl rounded-full px-4 py-2 z-10">
           <p className="text-text-secondary text-sm">
             Search for places to add to your lists

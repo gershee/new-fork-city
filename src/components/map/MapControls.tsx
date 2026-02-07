@@ -3,10 +3,11 @@
 import { motion } from "framer-motion";
 
 interface MapControlsProps {
-  mode: "pins" | "heatmap";
-  onModeChange: (mode: "pins" | "heatmap") => void;
+  mode: "pins" | "trending";
+  onModeChange: (mode: "pins" | "trending") => void;
   onLayersClick: () => void;
   pinCount?: number;
+  trendingCount?: number;
 }
 
 export function MapControls({
@@ -14,6 +15,7 @@ export function MapControls({
   onModeChange,
   onLayersClick,
   pinCount,
+  trendingCount,
 }: MapControlsProps) {
   return (
     <div className="absolute top-4 left-4 z-10 flex gap-2">
@@ -41,21 +43,24 @@ export function MapControls({
           </span>
         </button>
         <button
-          onClick={() => onModeChange("heatmap")}
+          onClick={() => onModeChange("trending")}
           className={`relative px-4 py-2 text-sm font-medium rounded-[--radius-sm] transition-colors ${
-            mode === "heatmap" ? "text-white" : "text-text-muted hover:text-text-primary"
+            mode === "trending" ? "text-white" : "text-text-muted hover:text-text-primary"
           }`}
         >
-          {mode === "heatmap" && (
+          {mode === "trending" && (
             <motion.div
               layoutId="mode-indicator"
-              className="absolute inset-0 bg-gradient-to-r from-primary to-accent rounded-[--radius-sm]"
+              className="absolute inset-0 bg-gradient-to-r from-neon-orange to-neon-pink rounded-[--radius-sm]"
               transition={{ type: "spring", stiffness: 400, damping: 30 }}
             />
           )}
           <span className="relative z-10 flex items-center gap-1.5">
-            <HeatIcon />
-            Heat
+            <TrendingIcon />
+            Trending
+            {trendingCount !== undefined && mode === "trending" && (
+              <span className="text-xs opacity-70">({trendingCount})</span>
+            )}
           </span>
         </button>
       </div>
@@ -82,10 +87,11 @@ function PinsIcon() {
   );
 }
 
-function HeatIcon() {
+function TrendingIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 2c.6.7 6 7 6 12a6 6 0 1 1-12 0c0-5 5.4-11.3 6-12z" />
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+      <polyline points="17 6 23 6 23 12" />
     </svg>
   );
 }

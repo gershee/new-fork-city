@@ -327,6 +327,54 @@ body {
   border: 1.5px solid var(--background);
 }
 
+/* Trending pin styles */
+.emoji-marker-trending {
+  animation: trending-pulse 2s ease-in-out infinite;
+}
+
+.emoji-marker-trending .emoji-marker-bg {
+  opacity: 0.6 !important;
+  filter: blur(8px) !important;
+  animation: trending-glow 2s ease-in-out infinite;
+}
+
+.emoji-marker-fire {
+  position: absolute;
+  bottom: -8px;
+  right: -8px;
+  font-size: 16px;
+  z-index: 2;
+  animation: fire-bounce 0.5s ease-in-out infinite alternate;
+  filter: drop-shadow(0 2px 4px rgba(255, 107, 53, 0.5));
+}
+
+@keyframes trending-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes trending-glow {
+  0%, 100% {
+    box-shadow: 0 0 15px currentColor, 0 0 30px currentColor;
+  }
+  50% {
+    box-shadow: 0 0 25px currentColor, 0 0 50px currentColor;
+  }
+}
+
+@keyframes fire-bounce {
+  from {
+    transform: translateY(0px);
+  }
+  to {
+    transform: translateY(-3px);
+  }
+}
+
 /* ========== FUN ANIMATIONS ========== */
 
 /* Hot glow pulse animation */

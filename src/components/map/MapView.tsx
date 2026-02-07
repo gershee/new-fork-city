@@ -20,6 +20,7 @@ interface MapViewProps {
   interactive?: boolean;
   showHeatmap?: boolean;
   pinListCounts?: Map<string, number>;
+  showTrending?: boolean;
 }
 
 // NYC center coordinates
@@ -27,14 +28,15 @@ const NYC_CENTER: [number, number] = [-73.985428, 40.748817];
 const DEFAULT_ZOOM = 12;
 
 // Create emoji marker element
-function createEmojiMarker(emoji: string, color: string, onClick: () => void, listCount?: number): HTMLElement {
+function createEmojiMarker(emoji: string, color: string, onClick: () => void, listCount?: number, isTrending?: boolean): HTMLElement {
   const el = document.createElement("div");
-  el.className = "emoji-marker";
+  el.className = `emoji-marker ${isTrending ? 'emoji-marker-trending' : ''}`;
   const showBadge = listCount && listCount > 1;
   el.innerHTML = `
     <div class="emoji-marker-bg" style="background-color: ${color}"></div>
     <span class="emoji-marker-icon">${emoji}</span>
     ${showBadge ? `<span class="emoji-marker-badge">${listCount}</span>` : ''}
+    ${isTrending ? '<span class="emoji-marker-fire">🔥</span>' : ''}
   `;
   el.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -52,6 +54,7 @@ export function MapView({
   interactive = true,
   showHeatmap = false,
   pinListCounts,
+  showTrending = false,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -367,7 +370,7 @@ export function MapView({
             if (onPinClickRef.current) {
               onPinClickRef.current(pin);
             }
-          }, listCount),
+          }, listCount, showTrending),
           anchor: "center",
         })
           .setLngLat([pin.lng, pin.lat])
@@ -376,7 +379,7 @@ export function MapView({
         currentMarkers.set(pin.id, marker);
       }
     });
-  }, [pins, isLoaded, pinListCounts]);
+  }, [pins, isLoaded, pinListCounts, showTrending]);
 
   // Toggle heatmap visibility
   useEffect(() => {
