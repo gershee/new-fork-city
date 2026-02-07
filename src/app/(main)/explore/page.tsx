@@ -82,6 +82,27 @@ function MapPage() {
     }).length;
   }, [heatmapPins]);
 
+  // Calculate list counts for each pin location
+  const pinListCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    const tolerance = 0.001;
+
+    pins.forEach((pin) => {
+      // Find all pins at this location
+      const nearby = pins.filter(
+        (other) =>
+          Math.abs(other.lat - pin.lat) < tolerance &&
+          Math.abs(other.lng - pin.lng) < tolerance
+      );
+
+      // Count unique lists
+      const uniqueLists = new Set(nearby.map((p) => p.list_id));
+      counts.set(pin.id, uniqueLists.size);
+    });
+
+    return counts;
+  }, [pins]);
+
   // Check URL for heatmap param
   useEffect(() => {
     if (searchParams.get("heatmap") === "true") {
@@ -356,6 +377,7 @@ function MapPage() {
           pins={showHeatmap ? heatmapPins : pins}
           onPinClick={showHeatmap ? undefined : handlePinClick}
           showHeatmap={showHeatmap}
+          pinListCounts={pinListCounts}
         />
       </div>
 
