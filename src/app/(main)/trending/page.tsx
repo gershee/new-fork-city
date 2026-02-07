@@ -52,24 +52,24 @@ export default function TrendingPage() {
     const fetchTrending = async () => {
       const supabase = createClient();
 
-      // Fetch trending spots (all pins from public lists)
+      // Fetch trending spots (all pins)
       const { data: pinsData } = await supabase
         .from("pins")
         .select(`
           *,
-          list:lists!inner(
+          list:lists(
             *,
             profile:profiles(id, username, display_name, avatar_url)
           )
         `)
-        .eq("list.is_public", true)
         .order("created_at", { ascending: false })
         .limit(100);
 
-      if (pinsData) {
+      if (pinsData && pinsData.length > 0) {
         // Group by location (approximate) and count
         const spotMap = new Map<string, TrendingSpot>();
         pinsData.forEach((pin: any) => {
+          if (!pin.list) return; // Skip pins without list data
           const key = `${pin.lat.toFixed(4)},${pin.lng.toFixed(4)}`;
           if (!spotMap.has(key)) {
             spotMap.set(key, { ...pin, save_count: 1 });
@@ -88,24 +88,23 @@ export default function TrendingPage() {
         setSpots(sortedSpots);
       }
 
-      // Fetch trending lists (all lists with pins)
+      // Fetch trending lists with their pins
       const { data: listsData } = await supabase
         .from("lists")
         .select(`
           *,
           profile:profiles(id, username, display_name, avatar_url),
-          pins:pins(count)
+          pins(id)
         `)
         .order("updated_at", { ascending: false })
         .limit(50);
 
-      if (listsData) {
+      if (listsData && listsData.length > 0) {
         const listsWithCount = listsData
           .map((list: any) => ({
             ...list,
-            pins_count: list.pins?.[0]?.count || 0,
+            pins_count: Array.isArray(list.pins) ? list.pins.length : 0,
           }))
-          .filter((list: any) => list.pins_count > 0) // Only show lists with pins
           .sort((a: any, b: any) => b.pins_count - a.pins_count);
         setLists(listsWithCount);
       }

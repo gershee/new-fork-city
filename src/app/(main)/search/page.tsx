@@ -131,21 +131,20 @@ export default function SearchPage() {
       // Fetch all lists with pins
       const { data: lists } = await supabase
         .from("lists")
-        .select(`*, profile:profiles(id, username, display_name, avatar_url), pins:pins(count), likes:list_likes(count)`)
+        .select(`*, profile:profiles(id, username, display_name, avatar_url), pins(id), likes:list_likes(id)`)
         .order("updated_at", { ascending: false })
         .limit(30);
 
-      if (lists) {
+      if (lists && lists.length > 0) {
         const listsWithCounts = lists
           .filter((list: any) => list.user_id !== currentUserId) // Exclude current user's lists
           .map((list: any) => ({
             ...list,
-            pins_count: list.pins?.[0]?.count || 0,
-            likes_count: list.likes?.[0]?.count || 0,
+            pins_count: Array.isArray(list.pins) ? list.pins.length : 0,
+            likes_count: Array.isArray(list.likes) ? list.likes.length : 0,
           }));
         // Sort by pins count (lists with content), then by likes
         const sorted = listsWithCounts
-          .filter((list: any) => list.pins_count > 0) // Only show lists with pins
           .sort((a: any, b: any) => (b.pins_count + b.likes_count) - (a.pins_count + a.likes_count))
           .slice(0, 10);
         setSuggestedLists(sorted);
@@ -203,14 +202,14 @@ export default function SearchPage() {
         } else if (activeTab === "lists") {
           const { data } = await supabase
             .from("lists")
-            .select(`*, profile:profiles(id, username, display_name, avatar_url), pins:pins(count)`)
+            .select(`*, profile:profiles(id, username, display_name, avatar_url), pins(id)`)
             .or(`name.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
             .limit(20);
 
           if (data) {
             const listsWithCount = data.map((list: any) => ({
               ...list,
-              pins_count: list.pins?.[0]?.count || 0,
+              pins_count: Array.isArray(list.pins) ? list.pins.length : 0,
             }));
             setListResults(listsWithCount);
           }
