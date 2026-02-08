@@ -344,7 +344,10 @@ export function MapView({
     map.current.easeTo({ center, duration: 1000 });
   }, [center, isLoaded]);
 
-  // Create/update emoji markers when pins change
+  // Create/update emoji markers when pins or display props change
+  // BUG FIX (2026-02-08): Previously, existing markers were not updated when
+  // showTrending or pinListCounts changed. Now we recreate marker elements
+  // when these props change to ensure fire emoji and badges render correctly.
   useEffect(() => {
     if (!map.current || !isLoaded) return;
 
@@ -367,10 +370,35 @@ export function MapView({
         return;
       }
 
-      if (!currentMarkers.has(pin.id)) {
-        const emoji = pin.list.emoji_icon;
-        const color = pin.list.color || "#ff2d92";
-        const listCount = pinListCounts?.get(pin.id);
+      const emoji = pin.list.emoji_icon;
+      const color = pin.list.color || "#ff2d92";
+      const listCount = pinListCounts?.get(pin.id);
+
+      if (currentMarkers.has(pin.id)) {
+        // Update existing marker's element to reflect current props
+        // (showTrending, pinListCounts may have changed)
+        const existingMarker = currentMarkers.get(pin.id)!;
+        const newElement = createEmojiMarker(emoji, color, () => {
+          if (onPinClickRef.current) {
+            onPinClickRef.current(pin);
+          }
+        }, listCount, showTrending);
+        
+        // Replace the marker element in-place
+        const oldElement = existingMarker.getElement();
+        oldElement.replaceWith(newElement);
+        // Mapbox marker internally references the element, so we need to
+        // remove and recreate the marker to properly update the reference
+        existingMarker.remove();
+        const updatedMarker = new mapboxgl.Marker({
+          element: newElement,
+          anchor: "center",
+        })
+          .setLngLat([pin.lng, pin.lat])
+          .addTo(map.current!);
+        currentMarkers.set(pin.id, updatedMarker);
+      } else {
+        // Create new marker
         const marker = new mapboxgl.Marker({
           element: createEmojiMarker(emoji, color, () => {
             if (onPinClickRef.current) {
