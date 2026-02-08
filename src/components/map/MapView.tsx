@@ -389,6 +389,7 @@ export function MapView({
       if (currentMarkers.has(pin.id)) {
         // Only update if state actually changed
         if (stateChanged) {
+          console.log("[MapView] Updating marker for pin:", pin.id, "at", pin.lng, pin.lat, "showTrending:", showTrending);
           const existingMarker = currentMarkers.get(pin.id)!;
           existingMarker.remove();
           
@@ -408,6 +409,7 @@ export function MapView({
         }
       } else {
         // Create new marker
+        console.log("[MapView] Creating marker for pin:", pin.id, "at", pin.lng, pin.lat);
         const marker = new mapboxgl.Marker({
           element: createEmojiMarker(emoji, color, () => {
             if (onPinClickRef.current) {
