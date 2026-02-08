@@ -59,6 +59,8 @@ export function MapView({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  // Track previous marker state to avoid unnecessary recreations
+  const markerStateRef = useRef<Map<string, { listCount: number | undefined; showTrending: boolean }>>(new Map());
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Use refs to avoid stale closures in event handlers
@@ -348,10 +350,13 @@ export function MapView({
   // BUG FIX (2026-02-08): Previously, existing markers were not updated when
   // showTrending or pinListCounts changed. Now we recreate marker elements
   // when these props change to ensure fire emoji and badges render correctly.
+  // PERF FIX (2026-02-08): Only recreate markers whose state actually changed,
+  // not all markers on every prop change.
   useEffect(() => {
     if (!map.current || !isLoaded) return;
 
     const currentMarkers = markersRef.current;
+    const markerStates = markerStateRef.current;
     const newPinIds = new Set(pins.map((p) => p.id));
 
     // Remove markers for pins that no longer exist
@@ -359,6 +364,7 @@ export function MapView({
       if (!newPinIds.has(id)) {
         marker.remove();
         currentMarkers.delete(id);
+        markerStates.delete(id);
       }
     });
 
@@ -374,29 +380,32 @@ export function MapView({
       const color = pin.list.color || "#ff2d92";
       const listCount = pinListCounts?.get(pin.id);
 
+      // Check if marker state actually changed
+      const prevState = markerStates.get(pin.id);
+      const stateChanged = !prevState || 
+        prevState.listCount !== listCount || 
+        prevState.showTrending !== showTrending;
+
       if (currentMarkers.has(pin.id)) {
-        // Update existing marker's element to reflect current props
-        // (showTrending, pinListCounts may have changed)
-        const existingMarker = currentMarkers.get(pin.id)!;
-        const newElement = createEmojiMarker(emoji, color, () => {
-          if (onPinClickRef.current) {
-            onPinClickRef.current(pin);
-          }
-        }, listCount, showTrending);
-        
-        // Replace the marker element in-place
-        const oldElement = existingMarker.getElement();
-        oldElement.replaceWith(newElement);
-        // Mapbox marker internally references the element, so we need to
-        // remove and recreate the marker to properly update the reference
-        existingMarker.remove();
-        const updatedMarker = new mapboxgl.Marker({
-          element: newElement,
-          anchor: "center",
-        })
-          .setLngLat([pin.lng, pin.lat])
-          .addTo(map.current!);
-        currentMarkers.set(pin.id, updatedMarker);
+        // Only update if state actually changed
+        if (stateChanged) {
+          const existingMarker = currentMarkers.get(pin.id)!;
+          existingMarker.remove();
+          
+          const newMarker = new mapboxgl.Marker({
+            element: createEmojiMarker(emoji, color, () => {
+              if (onPinClickRef.current) {
+                onPinClickRef.current(pin);
+              }
+            }, listCount, showTrending),
+            anchor: "center",
+          })
+            .setLngLat([pin.lng, pin.lat])
+            .addTo(map.current!);
+          
+          currentMarkers.set(pin.id, newMarker);
+          markerStates.set(pin.id, { listCount, showTrending });
+        }
       } else {
         // Create new marker
         const marker = new mapboxgl.Marker({
@@ -411,6 +420,7 @@ export function MapView({
           .addTo(map.current!);
 
         currentMarkers.set(pin.id, marker);
+        markerStates.set(pin.id, { listCount, showTrending });
       }
     });
   }, [pins, isLoaded, pinListCounts, showTrending]);
