@@ -391,24 +391,19 @@ export function MapView({
         if (stateChanged) {
           console.log("[MapView] Updating marker for pin:", pin.id, "at", pin.lng, pin.lat, "showTrending:", showTrending);
           const existingMarker = currentMarkers.get(pin.id)!;
+          const el = existingMarker.getElement();
           
-          // Create new marker FIRST, then remove old one
-          // This prevents potential timing issues with Mapbox
-          const newMarker = new mapboxgl.Marker({
-            element: createEmojiMarker(emoji, color, () => {
-              if (onPinClickRef.current) {
-                onPinClickRef.current(pin);
-              }
-            }, listCount, showTrending),
-            anchor: "center",
-          })
-            .setLngLat([pin.lng, pin.lat])
-            .addTo(map.current!);
+          // Update the element in-place instead of creating a new marker
+          // This preserves Mapbox's internal positioning state
+          el.className = `emoji-marker ${showTrending ? 'emoji-marker-trending' : ''}`;
+          const showBadge = listCount && listCount > 1;
+          el.innerHTML = `
+            <div class="emoji-marker-bg" style="background-color: ${color}"></div>
+            <span class="emoji-marker-icon">${emoji}</span>
+            ${showBadge ? `<span class="emoji-marker-badge">${listCount}</span>` : ''}
+            ${showTrending ? '<span class="emoji-marker-fire">🔥</span>' : ''}
+          `;
           
-          // Now remove the old marker
-          existingMarker.remove();
-          
-          currentMarkers.set(pin.id, newMarker);
           markerStates.set(pin.id, { listCount, showTrending });
         }
       } else {
