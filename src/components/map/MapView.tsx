@@ -36,7 +36,6 @@ function createEmojiMarker(emoji: string, color: string, onClick: () => void, li
     <div class="emoji-marker-bg" style="background-color: ${color}"></div>
     <span class="emoji-marker-icon">${emoji}</span>
     ${showBadge ? `<span class="emoji-marker-badge">${listCount}</span>` : ''}
-    ${isTrending ? '<span class="emoji-marker-fire">🔥</span>' : ''}
   `;
   el.addEventListener("click", (e) => {
     e.stopPropagation();

@@ -90,7 +90,7 @@ export function EditPinForm({
             Delete this spot?
           </h3>
           <p className="text-text-secondary">
-            "{pin.name}" will be permanently removed from your list.
+            &quot;{pin.name}&quot; will be permanently removed from your list.
           </p>
         </div>
 

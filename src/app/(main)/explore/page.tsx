@@ -434,24 +434,57 @@ function MapPage() {
         trendingCount={trendingPins.length}
       />
 
+      {/* Floating Search Button */}
+      <motion.button
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => router.push("/search")}
+        className="fixed top-4 left-4 z-20 bg-surface-elevated/90 backdrop-blur-xl text-text-primary p-3 rounded-full shadow-card border border-border hover:shadow-card-hover"
+        aria-label="Search"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
+      </motion.button>
+
+      {/* Floating Profile Button */}
+      <motion.button
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => router.push("/profile")}
+        className="fixed top-4 right-4 z-20 bg-surface-elevated/90 backdrop-blur-xl text-text-primary p-1 rounded-full shadow-card border border-border hover:shadow-card-hover"
+        aria-label="Profile"
+      >
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-semibold text-sm">
+          {currentUserId ? currentUserId.substring(0, 2).toUpperCase() : "?"}
+        </div>
+      </motion.button>
+
       {/* Floating Discover Button */}
       {!showTrending && pins.length > 0 && (
         <motion.button
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           transition={{ delay: 0.5, type: "spring", stiffness: 300 }}
           onClick={() => router.push("/trending")}
-          className="fixed bottom-24 right-4 z-20 bg-gradient-to-r from-neon-pink to-neon-cyan p-4 rounded-2xl shadow-lg float-pulse"
+          className="fixed bottom-24 right-4 z-20 bg-surface-elevated text-text-primary p-3 rounded-2xl shadow-card border border-border hover:shadow-card-hover"
         >
           <div className="flex items-center gap-2">
-            <span className="text-xl">🔥</span>
-            <span className="text-white font-semibold text-sm">Discover</span>
+            <span className="text-lg">🔥</span>
+            <span className="font-medium text-sm">Trending</span>
           </div>
           {hotSpotsCount > 0 && (
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+              className="absolute -top-1 -right-1 w-5 h-5 bg-soft-orange rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2 border-background"
             >
               {hotSpotsCount > 9 ? "9+" : hotSpotsCount}
             </motion.div>

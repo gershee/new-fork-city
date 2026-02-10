@@ -29,10 +29,10 @@
   --font-bold: 700;
 
   /* ========== BORDER RADIUS ========== */
-  --radius-sm: 0.5rem;   /* 8px - buttons, small elements */
-  --radius-md: 0.75rem;  /* 12px - cards, inputs */
-  --radius-lg: 1rem;     /* 16px - sheets, larger cards */
-  --radius-xl: 1.25rem;  /* 20px - modals */
+  --radius-sm: 0.625rem; /* 10px - buttons, small elements */
+  --radius-md: 1rem;     /* 16px - cards, inputs */
+  --radius-lg: 1.25rem;  /* 20px - sheets, larger cards */
+  --radius-xl: 1.5rem;   /* 24px - modals */
   --radius-full: 9999px; /* pills, avatars */
 
   /* ========== COLORS ========== */
@@ -40,22 +40,28 @@
   --background: #0c0c12;
   --foreground: #f8f8fa;
 
-  /* Primary accent - toned down pink (Beli-inspired) */
-  --primary: #f04e8c;
-  --primary-hover: #e63d7b;
+  /* Primary accent - muted pink */
+  --primary: rgba(240, 78, 140, 0.8);
+  --primary-hover: rgba(230, 61, 123, 0.9);
   --primary-muted: rgba(240, 78, 140, 0.15);
 
-  /* Secondary accent - softer teal */
-  --accent: #2dd4bf;
-  --accent-hover: #14b8a6;
-  --accent-muted: rgba(45, 212, 191, 0.15);
+  /* Secondary accent - deeper teal */
+  --accent: #3b9a8f;
+  --accent-hover: #2d857c;
+  --accent-muted: rgba(59, 154, 143, 0.15);
+
+  /* Warm neutral - cream for contrast */
+  --warm-neutral: #f5f1ed;
+
+  /* Soft orange accent */
+  --soft-orange: #ffa366;
 
   /* Legacy neon colors (for backward compatibility) */
-  --neon-pink: #f04e8c;
-  --neon-cyan: #2dd4bf;
+  --neon-pink: rgba(240, 78, 140, 0.8);
+  --neon-cyan: #3b9a8f;
   --neon-purple: #a78bfa;
   --neon-green: #34d399;
-  --neon-orange: #fb923c;
+  --neon-orange: #ffa366;
 
   /* Surface colors - more depth */
   --surface: #16161f;
@@ -84,10 +90,11 @@
   --status-error-bg: rgba(248, 113, 113, 0.15);
 
   /* ========== SHADOWS ========== */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(240, 78, 140, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.2);
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-glow: 0 0 20px rgba(240, 78, 140, 0.15);
 
   /* ========== TRANSITIONS ========== */
   --transition-fast: 150ms ease;
@@ -155,26 +162,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Glow utilities - softer, more subtle */
+/* Glow utilities - minimal, subtle */
 .glow-primary {
-  box-shadow: 0 0 20px rgba(240, 78, 140, 0.25);
+  box-shadow: 0 0 20px rgba(240, 78, 140, 0.1);
 }
 
 .glow-accent {
-  box-shadow: 0 0 20px rgba(45, 212, 191, 0.25);
-}
-
-/* Legacy neon glows (toned down) */
-.neon-glow-pink {
-  box-shadow: 0 0 15px rgba(240, 78, 140, 0.3);
-}
-
-.neon-glow-cyan {
-  box-shadow: 0 0 15px rgba(45, 212, 191, 0.3);
-}
-
-.neon-glow-purple {
-  box-shadow: 0 0 15px rgba(167, 139, 250, 0.3);
+  box-shadow: 0 0 20px rgba(45, 212, 191, 0.1);
 }
 
 /* Text glow - subtle */
@@ -327,15 +321,9 @@ body {
   border: 1.5px solid var(--background);
 }
 
-/* Trending pin styles */
-.emoji-marker-trending {
-  animation: trending-pulse 2s ease-in-out infinite;
-}
-
+/* Trending pin styles - simplified */
 .emoji-marker-trending .emoji-marker-bg {
-  opacity: 0.6 !important;
-  filter: blur(8px) !important;
-  animation: trending-glow 2s ease-in-out infinite;
+  opacity: 0.4 !important;
 }
 
 .emoji-marker-fire {
@@ -344,52 +332,10 @@ body {
   right: -8px;
   font-size: 16px;
   z-index: 2;
-  animation: fire-bounce 0.5s ease-in-out infinite alternate;
   filter: drop-shadow(0 2px 4px rgba(255, 107, 53, 0.5));
 }
 
-@keyframes trending-pulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.1);
-  }
-}
-
-@keyframes trending-glow {
-  0%, 100% {
-    box-shadow: 0 0 15px currentColor, 0 0 30px currentColor;
-  }
-  50% {
-    box-shadow: 0 0 25px currentColor, 0 0 50px currentColor;
-  }
-}
-
-@keyframes fire-bounce {
-  from {
-    transform: translateY(0px);
-  }
-  to {
-    transform: translateY(-3px);
-  }
-}
-
-/* ========== FUN ANIMATIONS ========== */
-
-/* Hot glow pulse animation */
-@keyframes hot-glow-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(251, 146, 60, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 20px 4px rgba(251, 146, 60, 0.3);
-  }
-}
-
-.hot-glow {
-  animation: hot-glow-pulse 2s ease-in-out infinite;
-}
+/* ========== SUBTLE ANIMATIONS ========== */
 
 /* Shimmer effect */
 @keyframes shimmer {
@@ -469,31 +415,6 @@ body {
   animation: rising-arrow 1s ease-in-out infinite;
 }
 
-/* Gradient border animation */
-@keyframes gradient-border {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
-.gradient-border-animated {
-  background: linear-gradient(
-    90deg,
-    var(--neon-orange),
-    var(--neon-pink),
-    var(--neon-purple),
-    var(--neon-cyan),
-    var(--neon-orange)
-  );
-  background-size: 300% 100%;
-  animation: gradient-border 3s linear infinite;
-}
 
 /* Skeleton loading with shimmer */
 .skeleton {
@@ -507,35 +428,6 @@ body {
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
-/* Hot spot marker glow */
-.hot-marker {
-  position: relative;
-}
-
-.hot-marker::before {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(251, 146, 60, 0.4), transparent 70%);
-  animation: hot-glow-pulse 2s ease-in-out infinite;
-}
-
-/* Floating button pulse */
-@keyframes float-pulse {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 4px 20px rgba(240, 78, 140, 0.3);
-  }
-  50% {
-    transform: scale(1.02);
-    box-shadow: 0 6px 30px rgba(240, 78, 140, 0.4);
-  }
-}
-
-.float-pulse {
-  animation: float-pulse 2s ease-in-out infinite;
-}
 
 /* Stacked avatars */
 .avatar-stack {
@@ -550,4 +442,28 @@ body {
 
 .avatar-stack > *:first-child {
   margin-left: 0;
+}
+
+/* ========== SOFT SHADOW UTILITIES ========== */
+.shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+.shadow-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.shadow-card-hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Cozy card styles */
+.card-minimal {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  transition: box-shadow var(--transition-base);
+}
+
+.card-minimal:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }

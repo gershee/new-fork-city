@@ -7,32 +7,32 @@ type ConfettiType = "save" | "hot" | "list" | "follow" | "milestone";
 
 const confettiConfigs: Record<ConfettiType, confetti.Options> = {
   save: {
-    particleCount: 50,
+    particleCount: 30,
     spread: 60,
     origin: { y: 0.7 },
     colors: ["#f04e8c", "#2dd4bf", "#a78bfa"],
   },
   hot: {
-    particleCount: 100,
+    particleCount: 30,
     spread: 70,
     origin: { y: 0.6 },
     colors: ["#fb923c", "#f04e8c", "#fbbf24"],
     shapes: ["circle"],
   },
   list: {
-    particleCount: 60,
+    particleCount: 30,
     spread: 55,
     origin: { y: 0.65 },
     colors: ["#2dd4bf", "#34d399", "#a78bfa"],
   },
   follow: {
-    particleCount: 40,
+    particleCount: 30,
     spread: 50,
     origin: { y: 0.7 },
     colors: ["#f04e8c", "#a78bfa", "#60a5fa"],
   },
   milestone: {
-    particleCount: 150,
+    particleCount: 100,
     spread: 100,
     origin: { y: 0.5 },
     colors: ["#fbbf24", "#fb923c", "#f04e8c", "#a78bfa", "#2dd4bf"],
@@ -41,6 +41,12 @@ const confettiConfigs: Record<ConfettiType, confetti.Options> = {
     gravity: 0.8,
   },
 };
+
+// Helper to check if confetti should fire based on milestone
+export function shouldFireConfettiForPinCount(pinCount: number): boolean {
+  // Fire confetti only on milestones: 1st, 10th, 50th, 100th pin
+  return pinCount === 1 || pinCount === 10 || pinCount === 50 || pinCount === 100;
+}
 
 export function fireConfetti(type: ConfettiType = "save") {
   const config = confettiConfigs[type];

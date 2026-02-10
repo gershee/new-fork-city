@@ -19,34 +19,16 @@ const navItems: NavItem[] = [
     activeIcon: <MapIconFilled />,
   },
   {
-    href: "/trending",
-    label: "Trending",
-    icon: <TrendingIcon />,
-    activeIcon: <TrendingIconFilled />,
-  },
-  {
     href: "/feed",
     label: "Feed",
     icon: <FeedIcon />,
     activeIcon: <FeedIconFilled />,
   },
   {
-    href: "/search",
-    label: "Search",
-    icon: <SearchIcon />,
-    activeIcon: <SearchIconFilled />,
-  },
-  {
     href: "/lists",
     label: "Lists",
     icon: <ListIcon />,
     activeIcon: <ListIconFilled />,
-  },
-  {
-    href: "/profile",
-    label: "You",
-    icon: <ProfileIcon />,
-    activeIcon: <ProfileIconFilled />,
   },
 ];
 
@@ -82,7 +64,7 @@ export function BottomNav() {
                 {isActive && (
                   <motion.div
                     layoutId="nav-indicator"
-                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary"
+                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_4px_rgba(240,78,140,0.4)]"
                     transition={{ type: "spring", stiffness: 400, damping: 25 }}
                   />
                 )}
@@ -134,70 +116,7 @@ function MapIconFilled() {
   );
 }
 
-function ActivityIcon() {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-    </svg>
-  );
-}
-
-function ActivityIconFilled() {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-    </svg>
-  );
-}
-
-function DiscoverIcon() {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-    </svg>
-  );
-}
-
-function DiscoverIconFilled() {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-    >
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3.55 5.21l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z" />
-    </svg>
-  );
-}
+// Unused icons removed
 
 function ListIcon() {
   return (

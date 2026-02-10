@@ -3,7 +3,7 @@
 import { forwardRef, ButtonHTMLAttributes } from "react";
 import { motion, HTMLMotionProps } from "framer-motion";
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "neon";
+type ButtonVariant = "primary" | "secondary" | "ghost";
 type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonProps
@@ -17,13 +17,11 @@ interface ButtonProps
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    "bg-neon-pink text-white hover:bg-neon-pink/90 neon-glow-pink",
+    "bg-neon-pink text-white hover:bg-neon-pink/90 shadow-[0_2px_8px_rgba(240,78,140,0.3)]",
   secondary:
-    "bg-surface-elevated text-text-primary border border-border hover:bg-surface-hover hover:border-border-hover",
+    "bg-surface-elevated text-text-primary border border-border hover:bg-surface-hover hover:border-border-hover shadow-[0_2px_8px_rgba(0,0,0,0.1)]",
   ghost:
     "bg-transparent text-text-secondary hover:text-text-primary hover:bg-surface-hover",
-  neon:
-    "bg-transparent border-2 border-neon-cyan text-neon-cyan hover:bg-neon-cyan/10 neon-glow-cyan",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -51,8 +49,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <motion.button
         ref={ref}
-        whileTap={{ scale: 0.97 }}
-        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        whileHover={{ scale: 1.01 }}
         disabled={disabled || isLoading}
         onClick={onClick}
         className={`

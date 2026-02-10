@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Button, HotBanner, BottomSheet } from "@/components/ui";
-import { FireParticles, RisingParticles } from "@/components/effects";
+import { Button, BottomSheet } from "@/components/ui";
+import { RisingParticles } from "@/components/effects";
 import { PinDetail } from "@/components/pins/PinDetail";
 import { createClient } from "@/lib/supabase/client";
 import type { Pin, List, Profile } from "@/types";
@@ -34,17 +34,6 @@ interface TrendingUser extends Profile {
 type Tab = "spots" | "lists" | "users";
 type TimeFilter = "today" | "week" | "all";
 
-const CATEGORY_FILTERS = [
-  { id: "all", label: "All", emoji: "✨" },
-  { id: "pizza", label: "Pizza", emoji: "🍕" },
-  { id: "noodles", label: "Noodles", emoji: "🍜" },
-  { id: "coffee", label: "Coffee", emoji: "☕" },
-  { id: "bars", label: "Bars", emoji: "🍸" },
-  { id: "tacos", label: "Tacos", emoji: "🌮" },
-  { id: "sushi", label: "Sushi", emoji: "🍣" },
-  { id: "dessert", label: "Dessert", emoji: "🍰" },
-];
-
 export default function TrendingPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("spots");
@@ -53,7 +42,6 @@ export default function TrendingPage() {
   const [users, setUsers] = useState<TrendingUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("week");
-  const [categoryFilter, setCategoryFilter] = useState("all");
   const [selectedPin, setSelectedPin] = useState<TrendingSpot | null>(null);
   const [savedByData, setSavedByData] = useState<SavedByInfo[]>([]);
   const [isLoadingSavedBy, setIsLoadingSavedBy] = useState(false);
@@ -218,29 +206,8 @@ export default function TrendingPage() {
       filtered = filtered.slice(0, Math.ceil(filtered.length * 0.7));
     }
 
-    // Category filter
-    if (categoryFilter !== "all") {
-      const categoryKeywords: Record<string, string[]> = {
-        pizza: ["pizza", "slice", "pie"],
-        noodles: ["noodle", "ramen", "pho", "udon", "soba"],
-        coffee: ["coffee", "cafe", "espresso", "latte"],
-        bars: ["bar", "cocktail", "wine", "beer", "pub"],
-        tacos: ["taco", "mexican", "burrito", "quesadilla"],
-        sushi: ["sushi", "japanese", "sashimi", "omakase"],
-        dessert: ["dessert", "ice cream", "bakery", "cake", "cookie", "donut"],
-      };
-      const keywords = categoryKeywords[categoryFilter] || [];
-      filtered = filtered.filter((spot) =>
-        keywords.some(
-          (kw) =>
-            spot.name.toLowerCase().includes(kw) ||
-            (spot.list?.name || "").toLowerCase().includes(kw)
-        )
-      );
-    }
-
     return filtered;
-  }, [spots, timeFilter, categoryFilter]);
+  }, [spots, timeFilter]);
 
   // Get hot spots for banner (top 3 with 5+ saves)
   const hotSpots = useMemo(() => {
@@ -295,8 +262,8 @@ export default function TrendingPage() {
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${
                 activeTab === tab.id
-                  ? "bg-gradient-to-r from-neon-pink to-neon-purple text-white shadow-lg shadow-neon-pink/25"
-                  : "bg-surface-elevated text-text-muted hover:text-text-primary"
+                  ? "bg-primary text-white shadow-card"
+                  : "bg-surface-elevated text-text-muted hover:text-text-primary hover:bg-surface-hover"
               }`}
             >
               <span>{tab.icon}</span>
@@ -334,39 +301,8 @@ export default function TrendingPage() {
         </div>
       ) : (
         <div className="p-4 space-y-4">
-          {/* Hot Right Now Banner (only for spots tab) */}
-          {activeTab === "spots" && hotSpots.length > 0 && (
-            <HotBanner
-              spots={hotSpots}
-              onSpotClick={(spotId) => {
-                const spot = spots.find((s) => s.id === spotId);
-                if (spot) handleSpotClick(spot);
-              }}
-            />
-          )}
-
-          {/* Category Filter Chips (only for spots tab) */}
-          {activeTab === "spots" && (
-            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-              {CATEGORY_FILTERS.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setCategoryFilter(cat.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                    categoryFilter === cat.id
-                      ? "bg-neon-pink text-white"
-                      : "bg-surface-elevated text-text-muted hover:text-text-primary"
-                  }`}
-                >
-                  <span>{cat.emoji}</span>
-                  <span>{cat.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Rising Fast Section (only for spots tab, when not filtered) */}
-          {activeTab === "spots" && categoryFilter === "all" && risingSpots.length > 0 && (
+          {/* Rising Fast Section (only for spots tab) */}
+          {activeTab === "spots" && risingSpots.length > 0 && (
             <div className="bg-surface rounded-2xl p-4 relative overflow-hidden">
               <RisingParticles count={4} />
               <div className="flex items-center gap-2 mb-3">
@@ -424,8 +360,8 @@ export default function TrendingPage() {
                 {filteredSpots.length === 0 ? (
                   <EmptyState
                     icon="🔥"
-                    title={categoryFilter !== "all" ? "No spots in this category" : "No hot spots yet"}
-                    description={categoryFilter !== "all" ? "Try a different category" : "Spots will appear here as users rate them"}
+                    title="No hot spots yet"
+                    description="Spots will appear here as users rate them"
                   />
                 ) : (
                   filteredSpots.map((spot, index) => (
@@ -528,13 +464,13 @@ export default function TrendingPage() {
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.5 }}
           onClick={() => router.push("/explore?heatmap=true")}
-          className="w-full bg-gradient-to-r from-neon-orange via-neon-pink to-neon-purple p-4 rounded-2xl flex items-center justify-between shadow-lg shadow-neon-pink/20"
+          className="w-full bg-surface-elevated p-4 rounded-[--radius-lg] flex items-center justify-between shadow-card hover:shadow-card-hover transition-shadow border border-border"
         >
           <div className="flex items-center gap-3">
             <span className="text-2xl">🗺️</span>
             <div className="text-left">
-              <p className="font-semibold text-white">View Heatmap</p>
-              <p className="text-white/70 text-sm">See where everyone's going</p>
+              <p className="font-semibold text-text-primary">View Heatmap</p>
+              <p className="text-text-secondary text-sm">See where everyone's going</p>
             </div>
           </div>
           <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -555,50 +491,26 @@ function SpotCard({
   rank: number;
   onClick: () => void;
 }) {
-  const getRankStyle = (rank: number) => {
-    if (rank === 1) return "bg-gradient-to-br from-yellow-400 to-orange-500 text-white";
-    if (rank === 2) return "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800";
-    if (rank === 3) return "bg-gradient-to-br from-amber-600 to-amber-700 text-white";
-    return "bg-surface text-text-muted";
-  };
-
   const isHot = spot.save_count >= 3;
 
   return (
-    <div className={`relative ${isHot ? "p-[2px] rounded-2xl gradient-border-animated" : ""}`}>
-      <motion.button
-        onClick={onClick}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        className={`w-full bg-surface-elevated rounded-2xl p-4 text-left relative overflow-hidden ${isHot ? "hot-glow" : ""}`}
-      >
-        {/* Rank badge */}
-        <div
-          className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${getRankStyle(rank)}`}
-        >
-          {rank}
+    <motion.button
+      onClick={onClick}
+      whileHover={{ scale: 1.01 }}
+      whileTap={{ scale: 0.99 }}
+      className="w-full bg-surface-elevated rounded-[--radius-lg] p-4 text-left relative overflow-hidden shadow-card hover:shadow-card-hover transition-shadow"
+    >
+      {/* Rank badge */}
+      <div className="absolute top-3 right-3 w-7 h-7 rounded-full flex items-center justify-center font-semibold text-xs bg-surface-hover text-text-secondary">
+        {rank}
+      </div>
+
+      {/* Fire indicator for hot spots */}
+      {isHot && (
+        <div className="absolute top-3 left-3 text-base">
+          🔥
         </div>
-
-        {/* Fire indicator for hot spots */}
-        {isHot && (
-          <motion.div
-            className="absolute top-3 left-3"
-            animate={{ scale: [1, 1.2, 1] }}
-            transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 1 }}
-          >
-            🔥
-          </motion.div>
-        )}
-
-        {/* Glow effect for top 3 */}
-        {rank <= 3 && (
-          <div
-            className="absolute inset-0 opacity-10 pointer-events-none"
-            style={{
-              background: `radial-gradient(circle at top right, ${spot.list?.color || "#ff2d92"}, transparent 70%)`,
-            }}
-          />
-        )}
+      )}
 
         <div className={`flex items-start gap-3 pr-10 ${isHot ? "pl-6" : ""}`}>
           {/* Emoji */}
@@ -650,7 +562,6 @@ function SpotCard({
           </div>
         </div>
       </motion.button>
-    </div>
   );
 }
 
@@ -665,41 +576,22 @@ function ListCard({
   onClick: () => void;
   onUserClick: () => void;
 }) {
-  const getRankStyle = (rank: number) => {
-    if (rank === 1) return "bg-gradient-to-br from-yellow-400 to-orange-500 text-white";
-    if (rank === 2) return "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800";
-    if (rank === 3) return "bg-gradient-to-br from-amber-600 to-amber-700 text-white";
-    return "bg-surface text-text-muted";
-  };
-
   return (
     <motion.div
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      className="bg-surface-elevated rounded-2xl p-4 relative overflow-hidden"
+      whileHover={{ scale: 1.01 }}
+      whileTap={{ scale: 0.99 }}
+      className="bg-surface-elevated rounded-[--radius-lg] p-4 relative overflow-hidden shadow-card hover:shadow-card-hover transition-shadow"
     >
       {/* Rank badge */}
-      <div
-        className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${getRankStyle(rank)}`}
-      >
+      <div className="absolute top-3 right-3 w-7 h-7 rounded-full flex items-center justify-center font-semibold text-xs bg-surface-hover text-text-secondary">
         {rank}
       </div>
 
       {/* Color accent */}
       <div
-        className="absolute top-0 left-0 right-0 h-1"
+        className="absolute top-0 left-0 right-0 h-1 rounded-t-[--radius-lg]"
         style={{ backgroundColor: list.color }}
       />
-
-      {/* Glow effect for top 3 */}
-      {rank <= 3 && (
-        <div
-          className="absolute inset-0 opacity-10 pointer-events-none"
-          style={{
-            background: `radial-gradient(circle at top right, ${list.color}, transparent 70%)`,
-          }}
-        />
-      )}
 
       <button onClick={onClick} className="w-full text-left pr-10">
         <div className="flex items-start gap-3">
@@ -764,40 +656,21 @@ function UserCard({
   rank: number;
   onClick: () => void;
 }) {
-  const getRankStyle = (rank: number) => {
-    if (rank === 1) return "bg-gradient-to-br from-yellow-400 to-orange-500 text-white";
-    if (rank === 2) return "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800";
-    if (rank === 3) return "bg-gradient-to-br from-amber-600 to-amber-700 text-white";
-    return "bg-surface text-text-muted";
-  };
-
   return (
     <motion.button
       onClick={onClick}
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      className="w-full bg-surface-elevated rounded-2xl p-4 text-left relative overflow-hidden"
+      whileHover={{ scale: 1.01 }}
+      whileTap={{ scale: 0.99 }}
+      className="w-full bg-surface-elevated rounded-[--radius-lg] p-4 text-left relative overflow-hidden shadow-card hover:shadow-card-hover transition-shadow"
     >
       {/* Rank badge */}
-      <div
-        className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${getRankStyle(rank)}`}
-      >
+      <div className="absolute top-3 right-3 w-7 h-7 rounded-full flex items-center justify-center font-semibold text-xs bg-surface-hover text-text-secondary">
         {rank}
       </div>
 
-      {/* Glow effect for top 3 */}
-      {rank <= 3 && (
-        <div
-          className="absolute inset-0 opacity-5 pointer-events-none"
-          style={{
-            background: "radial-gradient(circle at top right, #ff2d92, transparent 70%)",
-          }}
-        />
-      )}
-
       <div className="flex items-center gap-4 pr-10">
         {/* Avatar */}
-        <div className="w-14 h-14 rounded-full bg-surface overflow-hidden shrink-0 ring-2 ring-neon-pink/20">
+        <div className="w-14 h-14 rounded-full bg-surface overflow-hidden shrink-0">
           {user.avatar_url ? (
             <img
               src={user.avatar_url}

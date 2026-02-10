@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
-import { Header, Tabs, Card, Avatar, Badge, EmptyState } from "@/components/ui";
+import { Header, Card, Avatar, Badge, EmptyState } from "@/components/ui";
 import type { Profile, List, Pin } from "@/types";
 
 // Types
@@ -18,38 +18,13 @@ interface ActivityItem {
   created_at: string;
 }
 
-interface TrendingSpot extends Pin {
-  save_count: number;
-  list: List & { profile: Profile };
-}
-
-interface TrendingList extends List {
-  pins_count: number;
-  profile: Profile;
-}
-
-type FeedTab = "following" | "trending";
-type TrendingSubTab = "spots" | "lists" | "users";
-
-interface TrendingUser extends Profile {
-  followers_count: number;
-  lists_count: number;
-}
 
 export default function FeedPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<FeedTab>("following");
-  const [trendingSubTab, setTrendingSubTab] = useState<TrendingSubTab>("spots");
 
   // Following state
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [isLoadingActivity, setIsLoadingActivity] = useState(true);
-
-  // Trending state
-  const [spots, setSpots] = useState<TrendingSpot[]>([]);
-  const [lists, setLists] = useState<TrendingList[]>([]);
-  const [users, setUsers] = useState<TrendingUser[]>([]);
-  const [isLoadingTrending, setIsLoadingTrending] = useState(true);
 
   // Fetch activity feed
   useEffect(() => {
@@ -135,118 +110,6 @@ export default function FeedPage() {
     fetchActivity();
   }, [router]);
 
-  // Fetch trending data
-  useEffect(() => {
-    const fetchTrending = async () => {
-      const supabase = createClient();
-
-      // Fetch trending spots
-      const { data: pinsData } = await supabase
-        .from("pins")
-        .select(`
-          *,
-          list:lists!list_id(
-            *,
-            profile:profiles!user_id(id, username, display_name, avatar_url)
-          )
-        `)
-        .eq("is_visited", true)
-        .gte("personal_rating", 4)
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      if (pinsData) {
-        const spotMap = new Map<string, TrendingSpot>();
-        pinsData.forEach((pin: any) => {
-          const key = `${pin.lat.toFixed(4)},${pin.lng.toFixed(4)}`;
-          if (!spotMap.has(key)) {
-            spotMap.set(key, { ...pin, save_count: 1 });
-          } else {
-            const existing = spotMap.get(key)!;
-            existing.save_count++;
-            if ((pin.personal_rating || 0) > (existing.personal_rating || 0)) {
-              spotMap.set(key, { ...pin, save_count: existing.save_count });
-            }
-          }
-        });
-
-        const sortedSpots = Array.from(spotMap.values())
-          .sort((a, b) => b.save_count - a.save_count || (b.personal_rating || 0) - (a.personal_rating || 0));
-        setSpots(sortedSpots);
-      }
-
-      // Fetch trending lists
-      const { data: listsData } = await supabase
-        .from("lists")
-        .select(`
-          *,
-          profile:profiles!user_id(id, username, display_name, avatar_url),
-          pins!list_id(id)
-        `)
-        .order("updated_at", { ascending: false })
-        .limit(20);
-
-      if (listsData) {
-        const listsWithCount = listsData
-          .map((list: any) => ({
-            ...list,
-            pins_count: Array.isArray(list.pins) ? list.pins.length : 0,
-          }))
-          .sort((a: any, b: any) => b.pins_count - a.pins_count);
-        setLists(listsWithCount);
-      }
-
-      // Fetch trending users
-      const { data: profilesData } = await supabase
-        .from("profiles")
-        .select("*")
-        .limit(50);
-
-      if (profilesData) {
-        const usersWithStats = await Promise.all(
-          profilesData.map(async (profile) => {
-            const [followersResult, listsResult] = await Promise.all([
-              supabase
-                .from("follows")
-                .select("*", { count: "exact", head: true })
-                .eq("following_id", profile.id),
-              supabase
-                .from("lists")
-                .select("*", { count: "exact", head: true })
-                .eq("user_id", profile.id)
-                .eq("is_public", true),
-            ]);
-
-            return {
-              ...profile,
-              followers_count: followersResult.count || 0,
-              lists_count: listsResult.count || 0,
-            };
-          })
-        );
-
-        const sortedUsers = usersWithStats
-          .filter((u) => u.lists_count > 0)
-          .sort((a, b) => b.followers_count - a.followers_count);
-        setUsers(sortedUsers);
-      }
-
-      setIsLoadingTrending(false);
-    };
-
-    fetchTrending();
-  }, []);
-
-  const mainTabs = [
-    { id: "following" as FeedTab, label: "Following" },
-    { id: "trending" as FeedTab, label: "Trending" },
-  ];
-
-  const trendingTabs = [
-    { id: "spots" as TrendingSubTab, label: "Spots" },
-    { id: "lists" as TrendingSubTab, label: "Lists" },
-    { id: "users" as TrendingSubTab, label: "People" },
-  ];
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -254,74 +117,23 @@ export default function FeedPage() {
         title="Feed"
         rightAction={
           <button
-            onClick={() => router.push("/discover")}
-            className="w-10 h-10 rounded-[--radius-md] bg-surface-elevated flex items-center justify-center hover:bg-surface-hover transition-colors"
+            onClick={() => router.push("/trending")}
+            className="flex items-center gap-2 px-3 py-2 rounded-[--radius-md] bg-surface-elevated hover:bg-surface-hover transition-colors"
           >
-            <SearchIcon />
+            <span className="text-sm font-medium">🔥 Trending</span>
           </button>
         }
       />
 
-      {/* Main Tabs */}
-      <div className="px-4 py-2 border-b border-border">
-        <Tabs
-          tabs={mainTabs}
-          activeTab={activeTab}
-          onTabChange={(tab) => setActiveTab(tab as FeedTab)}
-          variant="underline"
-        />
-      </div>
-
-      {/* Content */}
-      <AnimatePresence mode="wait">
-        {activeTab === "following" ? (
-          <motion.div
-            key="following"
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 10 }}
-            transition={{ duration: 0.2 }}
-          >
-            <FollowingFeed
-              activities={activities}
-              isLoading={isLoadingActivity}
-              onUserClick={(username) => router.push(`/user/${username}`)}
-              onPinClick={(listId) => router.push(`/lists/${listId}`)}
-              onListClick={(listId) => router.push(`/lists/${listId}`)}
-              onFindPeople={() => router.push("/discover")}
-            />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="trending"
-            initial={{ opacity: 0, x: 10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -10 }}
-            transition={{ duration: 0.2 }}
-          >
-            {/* Trending Sub-tabs */}
-            <div className="px-4 py-3">
-              <Tabs
-                tabs={trendingTabs}
-                activeTab={trendingSubTab}
-                onTabChange={(tab) => setTrendingSubTab(tab as TrendingSubTab)}
-                variant="pill"
-              />
-            </div>
-
-            <TrendingFeed
-              subTab={trendingSubTab}
-              spots={spots}
-              lists={lists}
-              users={users}
-              isLoading={isLoadingTrending}
-              onSpotClick={(listId) => router.push(`/lists/${listId}`)}
-              onListClick={(listId) => router.push(`/lists/${listId}`)}
-              onUserClick={(username) => router.push(`/user/${username}`)}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Following Feed Only */}
+      <FollowingFeed
+        activities={activities}
+        isLoading={isLoadingActivity}
+        onUserClick={(username) => router.push(`/user/${username}`)}
+        onPinClick={(listId) => router.push(`/lists/${listId}`)}
+        onListClick={(listId) => router.push(`/lists/${listId}`)}
+        onFindPeople={() => router.push("/discover")}
+      />
     </div>
   );
 }

@@ -16,7 +16,6 @@ export { ListItem } from "./ListItem";
 // Fun & viral components
 export { ToastProvider, useToast, getRandomToast, toastMessages } from "./SuccessToast";
 export { AnimatedCounter, AnimatedProgress } from "./AnimatedCounter";
-export { HotBanner } from "./HotBanner";
 export {
   Skeleton,
   CardSkeleton,
